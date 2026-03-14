@@ -151,6 +151,27 @@ type IoaResponse = {
   items?: IoaItem[];
 };
 
+type AgroSentimentHeadline = {
+  title?: string;
+  date?: string;
+  source?: string;
+  link?: string;
+};
+
+type AgroSentimentResponse = {
+  uf: string;
+  cultura: string;
+  sentiment_score: number;
+  sentiment_label: string;
+  headline_count: number;
+  top_topics: string[];
+  editorial_summary: string;
+  latest_headlines: AgroSentimentHeadline[];
+  source?: string;
+  updated_at?: string;
+  matched_scope?: string;
+};
+
 type ChartPoint = {
   safra: string;
   ibge: number | null;
@@ -349,6 +370,27 @@ function getSummaryIconClass(kind: "opportunity" | "pressure" | "news"): string 
   return "border-sky-800 bg-sky-950/60 text-sky-300";
 }
 
+function getSentimentBadgeClass(label?: string | null): string {
+  switch ((label || "").toLowerCase()) {
+    case "positivo":
+      return "border-emerald-700 bg-emerald-950/70 text-emerald-300";
+    case "negativo":
+      return "border-rose-700 bg-rose-950/70 text-rose-300";
+    default:
+      return "border-amber-700 bg-amber-950/70 text-amber-300";
+  }
+}
+
+function formatSentimentLabel(label?: string | null): string {
+  if (!label) return "Neutro";
+  const map: Record<string, string> = {
+    positivo: "Positivo",
+    negativo: "Negativo",
+    neutro: "Neutro",
+  };
+  return map[label.toLowerCase()] || label;
+}
+
 export default function AgroProductionPanel() {
   const [ufs, setUfs] = useState<AgroUfItem[]>([]);
   const [culturas, setCulturas] = useState<AgroCultureItem[]>([]);
@@ -370,12 +412,16 @@ export default function AgroProductionPanel() {
     useState<StatisticalRadarResponse | null>(null);
   const [ioaRadar, setIoaRadar] = useState<IoaResponse | null>(null);
 
+  const [agroSentiment, setAgroSentiment] =
+    useState<AgroSentimentResponse | null>(null);
+
   const [loadingUfs, setLoadingUfs] = useState(false);
   const [loadingCulturas, setLoadingCulturas] = useState(false);
   const [loadingSafras, setLoadingSafras] = useState(false);
   const [loadingComparativo, setLoadingComparativo] = useState(false);
   const [loadingHistorico, setLoadingHistorico] = useState(false);
   const [loadingRadar, setLoadingRadar] = useState(false);
+  const [loadingAgroSentiment, setLoadingAgroSentiment] = useState(false);
 
   const [chartMetric, setChartMetric] = useState<ChartMetric>("producao");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -533,6 +579,29 @@ export default function AgroProductionPanel() {
     }
   }
 
+  async function fetchAgroSentiment(uf: string, cultura: string) {
+    setLoadingAgroSentiment(true);
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/agro/sentimento?uf=${encodeURIComponent(
+          uf
+        )}&cultura=${encodeURIComponent(cultura)}`
+      );
+
+      if (!res.ok) {
+        throw new Error(`Erro ao carregar sentimento para ${uf} / ${cultura}.`);
+      }
+
+      const json: AgroSentimentResponse = await res.json();
+      setAgroSentiment(json);
+    } catch (error) {
+      console.error(error);
+      setAgroSentiment(null);
+    } finally {
+      setLoadingAgroSentiment(false);
+    }
+  }
+
   useEffect(() => {
     fetchUfs().catch((err) => {
       console.error(err);
@@ -552,6 +621,7 @@ export default function AgroProductionPanel() {
       setSelectedSafra("");
       setComparativo(null);
       setHistorico([]);
+      setAgroSentiment(null);
       return;
     }
 
@@ -562,6 +632,7 @@ export default function AgroProductionPanel() {
     setSelectedSafra("");
     setComparativo(null);
     setHistorico([]);
+    setAgroSentiment(null);
 
     fetchCulturas(selectedUf).catch((err) => {
       console.error(err);
@@ -575,6 +646,7 @@ export default function AgroProductionPanel() {
       setSelectedSafra("");
       setComparativo(null);
       setHistorico([]);
+      setAgroSentiment(null);
       return;
     }
 
@@ -583,6 +655,7 @@ export default function AgroProductionPanel() {
     setSelectedSafra("");
     setComparativo(null);
     setHistorico([]);
+    setAgroSentiment(null);
 
     fetchSafras(selectedUf, selectedCultura).catch((err) => {
       console.error(err);
@@ -592,6 +665,11 @@ export default function AgroProductionPanel() {
     fetchHistorico(selectedUf, selectedCultura).catch((err) => {
       console.error(err);
       setHistorico([]);
+    });
+
+    fetchAgroSentiment(selectedUf, selectedCultura).catch((err) => {
+      console.error(err);
+      setAgroSentiment(null);
     });
   }, [selectedUf, selectedCultura]);
 
@@ -964,6 +1042,163 @@ export default function AgroProductionPanel() {
                     />
                   </LineChart>
                 </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl backdrop-blur-sm">
+            <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-slate-100">
+                  Sentimento Editorial da Cultura
+                </h2>
+                <p className="text-sm text-slate-400">
+                  Leitura contextual de notícias para a cultura e estado selecionados.
+                </p>
+              </div>
+
+              {loadingAgroSentiment ? (
+                <span className="rounded-full border border-slate-700 bg-slate-900/60 px-3 py-1 text-xs text-slate-300">
+                  Atualizando...
+                </span>
+              ) : agroSentiment ? (
+                <div className="flex flex-wrap gap-2">
+                  <span
+                    className={`rounded-full border px-3 py-1 text-xs font-semibold ${getSentimentBadgeClass(
+                      agroSentiment.sentiment_label
+                    )}`}
+                  >
+                    {formatSentimentLabel(agroSentiment.sentiment_label)}
+                  </span>
+
+                  <span className="rounded-full border border-slate-700 bg-slate-800/80 px-3 py-1 text-xs font-semibold text-slate-200">
+                    Score: {formatNumber(agroSentiment.sentiment_score, 2)}
+                  </span>
+
+                  <span className="rounded-full border border-slate-700 bg-slate-800/80 px-3 py-1 text-xs font-semibold text-slate-200">
+                    Manchetes: {formatInteger(agroSentiment.headline_count)}
+                  </span>
+                </div>
+              ) : null}
+            </div>
+
+            {loadingAgroSentiment ? (
+              <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4 text-sm text-slate-300">
+                Carregando leitura editorial da cultura...
+              </div>
+            ) : !selectedUf || !selectedCultura ? (
+              <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4 text-sm text-slate-300">
+                Selecione um estado e uma cultura para visualizar o sentimento editorial.
+              </div>
+            ) : !agroSentiment ? (
+              <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4 text-sm text-slate-300">
+                Não foi possível carregar o sentimento editorial para a seleção atual.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                  <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-3">
+                    <p className="text-xs uppercase tracking-wide text-slate-400">
+                      Estado
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-slate-100">
+                      {formatUfLabel(selectedUfItem)}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-3">
+                    <p className="text-xs uppercase tracking-wide text-slate-400">
+                      Cultura
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-slate-100">
+                      {formatCropLabel(selectedCultura)}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-3">
+                    <p className="text-xs uppercase tracking-wide text-slate-400">
+                      Escopo da leitura
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-slate-100">
+                      {agroSentiment.matched_scope === "uf"
+                        ? "Cultura + UF"
+                        : "Cultura (fallback)"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4">
+                  <p className="mb-3 text-xs uppercase tracking-wide text-slate-400">
+                    Tópicos no radar
+                  </p>
+
+                  <div className="flex flex-wrap gap-2">
+                    {(agroSentiment.top_topics || []).length ? (
+                      agroSentiment.top_topics.map((topic) => (
+                        <span
+                          key={topic}
+                          className="rounded-full border border-slate-700 bg-slate-900/80 px-3 py-1 text-xs font-semibold text-slate-300"
+                        >
+                          {topic}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-sm text-slate-300">
+                        Sem tópicos identificados.
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4">
+                  <p className="text-xs uppercase tracking-wide text-slate-400">
+                    Resumo editorial
+                  </p>
+                  <p className="mt-2 text-sm leading-7 text-slate-300">
+                    {agroSentiment.editorial_summary || "Sem resumo disponível."}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <p className="text-xs uppercase tracking-wide text-slate-400">
+                      Manchetes recentes
+                    </p>
+
+                    {agroSentiment.updated_at && (
+                      <p className="text-xs text-slate-500">
+                        Atualizado: {agroSentiment.updated_at}
+                      </p>
+                    )}
+                  </div>
+
+                  {(agroSentiment.latest_headlines || []).length === 0 ? (
+                    <p className="text-sm text-slate-300">
+                      Sem manchetes recentes para exibir.
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {agroSentiment.latest_headlines.slice(0, 5).map((headline, idx) => (
+                        <div
+                          key={`${idx}-${headline.title || "headline"}`}
+                          className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3"
+                        >
+                          <p className="text-sm leading-6 text-slate-200">
+                            {headline.title || "Sem título"}
+                          </p>
+
+                          {(headline.date || headline.source) && (
+                            <p className="mt-2 text-xs text-slate-500">
+                              {[headline.date, headline.source]
+                                .filter(Boolean)
+                                .join(" • ")}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>

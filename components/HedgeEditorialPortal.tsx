@@ -601,7 +601,7 @@ export default function HedgeEditorialPortal() {
                 Monitoramento Analítico
               </p>
               <h1 className="mt-1 text-3xl font-bold tracking-tight text-white">
-                Monitoramento de Risco Agro
+                Agro Intelligence Engine
               </h1>
               <p className="mt-2 max-w-3xl text-sm text-slate-300">
                 Portal analítico com séries contínuas, forecast, comparação de
