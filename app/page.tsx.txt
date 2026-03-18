@@ -21,7 +21,7 @@ export default function Page() {
   const [entered, setEntered] = useState(false);
 
   if (entered) {
-    return <HedgeEditorialPortal onGoHome={() => setEntered(false)} />;
+    return <HedgeEditorialPortal />;
   }
 
   return (
