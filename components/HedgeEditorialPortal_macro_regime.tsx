@@ -19,7 +19,6 @@ import {
 } from "recharts";
 import AgroProductionPanel from "@/components/AgroProductionPanel";
 import MacroCreditoAgroPanel from "@/components/MacroCreditoAgroPanel";
-import AgroClimaPanel from "@/components/AgroClimaPanel";
 
 const MunicipalRiskMap = dynamic(
   () => import("@/components/MunicipalRiskMap"),
@@ -37,18 +36,6 @@ type PortalTab = "mercado" | "macro" | "mapa" | "producao";
 
 type HedgeEditorialPortalProps = {
   onGoHome?: () => void;
-};
-
-
-type IisMunicipioSnapshot = {
-  code_muni: string;
-  name_muni: string;
-  abbr_uf: string;
-  iis_window: number;
-  iis_value: number | null;
-  iis_1m?: number | null;
-  iis_3m?: number | null;
-  iis_6m?: number | null;
 };
 
 type AssetItem = {
@@ -705,10 +692,6 @@ export default function HedgeEditorialPortal({
   const [assets, setAssets] = useState<AssetItem[]>([]);
   const [selectedSymbol, setSelectedSymbol] = useState<string>("ICF");
   const [activeTab, setActiveTab] = useState<PortalTab>("mercado");
-  const [mapSelectedUf, setMapSelectedUf] = useState<string>("RS");
-  const [mapSelectedMunicipio, setMapSelectedMunicipio] = useState<string>("");
-  const [mapSelectedWindow, setMapSelectedWindow] = useState<1 | 3 | 6>(3);
-  const [selectedIisSnapshot, setSelectedIisSnapshot] = useState<IisMunicipioSnapshot | null>(null);
 
   const [continuous, setContinuous] = useState<ContinuousResponse | null>(null);
   const [compare, setCompare] = useState<CompareResponse | null>(null);
@@ -2719,34 +2702,7 @@ export default function HedgeEditorialPortal({
         )}
 
         {activeTab === "macro" && <MacroCreditoAgroPanel />}
-
-        {activeTab === "mapa" && (
-          <div className="space-y-3">
-            <MunicipalRiskMap
-              selectedUf={mapSelectedUf}
-              onSelectedUfChange={(uf) => {
-                setMapSelectedUf(uf);
-                setMapSelectedMunicipio("");
-                setSelectedIisSnapshot(null);
-              }}
-              selectedMunicipio={mapSelectedMunicipio}
-              onSelectedMunicipioChange={setMapSelectedMunicipio}
-              selectedWindow={mapSelectedWindow}
-              onSelectedWindowChange={setMapSelectedWindow}
-              onMunicipioSnapshotChange={setSelectedIisSnapshot}
-              showSelectors={true}
-            />
-
-            <AgroClimaPanel
-              selectedUf={mapSelectedUf}
-              selectedCodeMuni={mapSelectedMunicipio}
-              selectedWindow={mapSelectedWindow}
-              iisSnapshot={selectedIisSnapshot}
-              showSelector={false}
-            />
-          </div>
-        )}
-
+        {activeTab === "mapa" && <MunicipalRiskMap />}
         {activeTab === "producao" && <AgroProductionPanel />}
       </div>
     </div>
