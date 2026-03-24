@@ -18,8 +18,8 @@ import {
   Bar,
 } from "recharts";
 import AgroProductionPanel from "@/components/AgroProductionPanel";
-import MacroCreditoAgroPanel from "@/components/MacroCreditoAgroPanel";
 import AgroClimaPanel from "@/components/AgroClimaPanel";
+import MacroCreditoAgroPanel from "@/components/MacroCreditoAgroPanel";
 
 const MunicipalRiskMap = dynamic(
   () => import("@/components/MunicipalRiskMap"),
@@ -37,18 +37,6 @@ type PortalTab = "mercado" | "macro" | "mapa" | "producao";
 
 type HedgeEditorialPortalProps = {
   onGoHome?: () => void;
-};
-
-
-type IisMunicipioSnapshot = {
-  code_muni: string;
-  name_muni: string;
-  abbr_uf: string;
-  iis_window: number;
-  iis_value: number | null;
-  iis_1m?: number | null;
-  iis_3m?: number | null;
-  iis_6m?: number | null;
 };
 
 type AssetItem = {
@@ -705,10 +693,6 @@ export default function HedgeEditorialPortal({
   const [assets, setAssets] = useState<AssetItem[]>([]);
   const [selectedSymbol, setSelectedSymbol] = useState<string>("ICF");
   const [activeTab, setActiveTab] = useState<PortalTab>("mercado");
-  const [mapSelectedUf, setMapSelectedUf] = useState<string>("RS");
-  const [mapSelectedMunicipio, setMapSelectedMunicipio] = useState<string>("");
-  const [mapSelectedWindow, setMapSelectedWindow] = useState<1 | 3 | 6>(3);
-  const [selectedIisSnapshot, setSelectedIisSnapshot] = useState<IisMunicipioSnapshot | null>(null);
 
   const [continuous, setContinuous] = useState<ContinuousResponse | null>(null);
   const [compare, setCompare] = useState<CompareResponse | null>(null);
@@ -734,6 +718,12 @@ export default function HedgeEditorialPortal({
     null
   );
 
+  const [mapSelectedUf, setMapSelectedUf] = useState<string>("RS");
+  const [mapSelectedMunicipio, setMapSelectedMunicipio] =
+    useState<string>("4304606");
+  const [mapSelectedWindow, setMapSelectedWindow] = useState<1 | 3 | 6>(3);
+  const [mapMunicipioSnapshot, setMapMunicipioSnapshot] = useState<any | null>(null);
+
   const [compareHorizon] = useState<number>(10);
   const [backtestHorizon] = useState<number>(5);
   const [backtestTrainMin] = useState<number>(30);
@@ -756,7 +746,7 @@ export default function HedgeEditorialPortal({
   }
 
   async function fetchAssets() {
-    const res = await fetch(`${API_BASE_URL}/assets`);
+    const res = await fetch(`${API_BASE_URL}/assets`, { cache: "no-store" });
     if (!res.ok) {
       throw new Error("Erro ao carregar lista de ativos.");
     }
@@ -769,7 +759,7 @@ export default function HedgeEditorialPortal({
   }
 
   async function fetchContinuous(symbol: string) {
-    const res = await fetch(`${API_BASE_URL}/assets/${symbol}/continuous`);
+    const res = await fetch(`${API_BASE_URL}/assets/${symbol}/continuous`, { cache: "no-store" });
     if (!res.ok) {
       throw new Error(`Erro ao carregar série contínua para ${symbol}.`);
     }
@@ -875,7 +865,7 @@ export default function HedgeEditorialPortal({
   }
 
   async function fetchSentiment(symbol: string) {
-    const res = await fetch(`${API_BASE_URL}/sentiment/${symbol}`);
+    const res = await fetch(`${API_BASE_URL}/sentiment/${symbol}`, { cache: "no-store" });
     if (!res.ok) {
       throw new Error(`Erro ao carregar sentimento para ${symbol}.`);
     }
@@ -885,7 +875,7 @@ export default function HedgeEditorialPortal({
   }
 
   async function fetchSoySpreadLatest() {
-    const res = await fetch(`${API_BASE_URL}/spot-spreads/soy/latest`);
+    const res = await fetch(`${API_BASE_URL}/spot-spreads/soy/latest`, { cache: "no-store" });
     if (!res.ok) {
       throw new Error("Erro ao carregar spread logístico da soja.");
     }
@@ -895,7 +885,7 @@ export default function HedgeEditorialPortal({
   }
 
   async function fetchSoySpreadSeries() {
-    const res = await fetch(`${API_BASE_URL}/spot-spreads/soy`);
+    const res = await fetch(`${API_BASE_URL}/spot-spreads/soy`, { cache: "no-store" });
     if (!res.ok) {
       throw new Error("Erro ao carregar histórico do spread logístico da soja.");
     }
@@ -907,7 +897,7 @@ export default function HedgeEditorialPortal({
   async function fetchCepeaStatus() {
     setLoadingCepeaStatus(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/admin/update/cepea/status`);
+      const res = await fetch(`${API_BASE_URL}/admin/update/cepea/status`, { cache: "no-store" });
       if (!res.ok) {
         throw new Error("Erro ao carregar status da atualização CEPEA.");
       }
@@ -925,7 +915,7 @@ export default function HedgeEditorialPortal({
 
   async function fetchMacroRegime() {
     try {
-      const res = await fetch(`${API_BASE_URL}/macro-credito-agro/regime`);
+      const res = await fetch(`${API_BASE_URL}/macro-credito-agro/regime`, { cache: "no-store" });
       if (!res.ok) {
         throw new Error("Erro ao carregar indicador de regime macro.");
       }
@@ -946,15 +936,23 @@ export default function HedgeEditorialPortal({
 
       const res = await fetch(`${API_BASE_URL}/admin/update/cepea`, {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
       });
 
-      const data = await res.json();
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
+      }
 
       if (!res.ok || data?.status !== "ok") {
         const detail =
-          typeof data?.detail === "string"
-            ? data.detail
-            : data?.message || "Falha ao atualizar CEPEA.";
+          (typeof data?.detail === "string" && data.detail) ||
+          (typeof data?.message === "string" && data.message) ||
+          `Falha ao atualizar CEPEA (HTTP ${res.status}).`;
         throw new Error(detail);
       }
 
@@ -2639,79 +2637,65 @@ export default function HedgeEditorialPortal({
                   )}
                 </div>
 
-                <div className="rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl backdrop-blur-sm">
-                  <div className="mb-4">
-                    <h2 className="text-xl font-semibold text-slate-100">
-                      Resumo Quantitativo
-                    </h2>
-                    <p className="text-sm text-slate-400">
-                      Um retrato rápido do ativo selecionado.
-                    </p>
-                  </div>
+              </div>
+            </div>
 
-                  <div className="space-y-3">
-                    <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-3">
-                      <p className="text-xs uppercase tracking-wide text-slate-400">
-                        Ativo
-                      </p>
-                      <p className="mt-1 text-sm font-semibold text-slate-100">
-                        {continuous?.symbol ?? selectedSymbol} —{" "}
-                        {getAssetDisplayName(
-                          continuous?.symbol ?? selectedSymbol,
-                          continuous?.name
-                        )}
-                      </p>
-                    </div>
+            <div className="mt-6 rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl backdrop-blur-sm">
+              <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold text-slate-100">
+                    Resumo Quantitativo
+                  </h2>
+                  <p className="text-sm text-slate-400">
+                    Retrato horizontal do ativo selecionado, reunindo os principais sinais do módulo de mercado.
+                  </p>
+                </div>
+              </div>
 
-                    <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-3">
-                      <p className="text-xs uppercase tracking-wide text-slate-400">
-                        Melhor modelo do compare
-                      </p>
-                      <p className="mt-1 text-sm font-semibold text-slate-100">
-                        {compare ? formatModelName(compare.best_model) : "-"}
-                      </p>
-                    </div>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
+                <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4">
+                  <p className="text-xs uppercase tracking-wide text-slate-400">Ativo</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-100">
+                    {continuous?.symbol ?? selectedSymbol} — {getAssetDisplayName(
+                      continuous?.symbol ?? selectedSymbol,
+                      continuous?.name
+                    )}
+                  </p>
+                </div>
 
-                    <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-3">
-                      <p className="text-xs uppercase tracking-wide text-slate-400">
-                        Melhor por RMSE no backtest
-                      </p>
-                      <p className="mt-1 text-sm font-semibold text-slate-100">
-                        {backtest
-                          ? formatModelName(backtest.best_model_rmse)
-                          : "-"}
-                      </p>
-                    </div>
+                <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4">
+                  <p className="text-xs uppercase tracking-wide text-slate-400">Melhor modelo do compare</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-100">
+                    {compare ? formatModelName(compare.best_model) : "-"}
+                  </p>
+                </div>
 
-                    <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-3">
-                      <p className="text-xs uppercase tracking-wide text-slate-400">
-                        Melhor por direção no backtest
-                      </p>
-                      <p className="mt-1 text-sm font-semibold text-slate-100">
-                        {backtest
-                          ? formatModelName(backtest.best_model_directional)
-                          : "-"}
-                      </p>
-                    </div>
+                <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4">
+                  <p className="text-xs uppercase tracking-wide text-slate-400">Melhor por RMSE</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-100">
+                    {backtest ? formatModelName(backtest.best_model_rmse) : "-"}
+                  </p>
+                </div>
 
-                    <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-3">
-                      <p className="text-xs uppercase tracking-wide text-slate-400">
-                        Classificação do basis
-                      </p>
-                      <p className="mt-1 text-sm font-semibold text-slate-100">
-                        {soyBasisClassification.label}
-                      </p>
-                    </div>
+                <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4">
+                  <p className="text-xs uppercase tracking-wide text-slate-400">Melhor por direção</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-100">
+                    {backtest ? formatModelName(backtest.best_model_directional) : "-"}
+                  </p>
+                </div>
 
-                    <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-3">
-                      <p className="text-xs uppercase tracking-wide text-slate-400">
-                        Radar de arbitragem
-                      </p>
-                      <p className="mt-1 text-sm font-semibold text-slate-100">
-                        {arbitrageSignal?.classification ?? "-"}
-                      </p>
-                    </div>
-                  </div>
+                <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4">
+                  <p className="text-xs uppercase tracking-wide text-slate-400">Classificação do basis</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-100">
+                    {soyBasisClassification.label}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4">
+                  <p className="text-xs uppercase tracking-wide text-slate-400">Radar de arbitragem</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-100">
+                    {arbitrageSignal?.classification ?? "-"}
+                  </p>
                 </div>
               </div>
             </div>
@@ -2719,34 +2703,29 @@ export default function HedgeEditorialPortal({
         )}
 
         {activeTab === "macro" && <MacroCreditoAgroPanel />}
-
         {activeTab === "mapa" && (
-          <div className="space-y-3">
+          <div className="space-y-6">
             <MunicipalRiskMap
               selectedUf={mapSelectedUf}
-              onSelectedUfChange={(uf) => {
-                setMapSelectedUf(uf);
-                setMapSelectedMunicipio("");
-                setSelectedIisSnapshot(null);
-              }}
+              onSelectedUfChange={setMapSelectedUf}
               selectedMunicipio={mapSelectedMunicipio}
               onSelectedMunicipioChange={setMapSelectedMunicipio}
               selectedWindow={mapSelectedWindow}
               onSelectedWindowChange={setMapSelectedWindow}
-              onMunicipioSnapshotChange={setSelectedIisSnapshot}
+              onMunicipioSnapshotChange={setMapMunicipioSnapshot}
               showSelectors={true}
             />
 
             <AgroClimaPanel
+              selectedCodeMuni={mapSelectedMunicipio || null}
               selectedUf={mapSelectedUf}
-              selectedCodeMuni={mapSelectedMunicipio}
               selectedWindow={mapSelectedWindow}
-              iisSnapshot={selectedIisSnapshot}
+              initialUf={mapSelectedUf || "RS"}
               showSelector={false}
+              iisSnapshot={mapMunicipioSnapshot}
             />
           </div>
         )}
-
         {activeTab === "producao" && <AgroProductionPanel />}
       </div>
     </div>

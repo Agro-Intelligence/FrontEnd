@@ -7,6 +7,7 @@ import {
   Line,
   BarChart,
   Bar,
+  Cell,
   AreaChart,
   Area,
   XAxis,
@@ -65,6 +66,38 @@ type AgroClimaRow = {
   [key: string]: unknown;
 };
 
+type FenologiaPayload = {
+  fase_atual?: string;
+  cultura?: string;
+  estado?: string;
+  mes_referencia?: number | null;
+  janela_fase?: {
+    mes_inicio?: number | null;
+    mes_fim?: number | null;
+  } | null;
+  score?: number | null;
+  risco?: string;
+  drivers?: string[];
+  pesos?: {
+    hidrico?: number | null;
+    termico?: number | null;
+    iis?: number | null;
+  } | null;
+  flags?: {
+    stress_hidrico?: number | null;
+    stress_termico?: number | null;
+    seca_estrutural?: number | null;
+  } | null;
+};
+
+type LatestMetricsPayload = {
+  precip_anomalia_30d?: number | null;
+  precip_acum_30d?: number | null;
+  temp_anomalia_30d?: number | null;
+  temp_media_30d?: number | null;
+  iis_valor?: number | null;
+};
+
 type AgroClimaResponse = {
   municipio: {
     code_muni: string;
@@ -77,6 +110,8 @@ type AgroClimaResponse = {
     date_min: string;
     date_max: string;
   };
+  latest_metrics?: LatestMetricsPayload | null;
+  fenologia?: FenologiaPayload | null;
   rows: AgroClimaRow[];
 };
 
@@ -871,6 +906,125 @@ function getInsightToneClasses(tone: AgroClimateInsight["tone"]) {
   }
 }
 
+function formatPhaseLabel(value?: string | null) {
+  if (!value) return "—";
+  return value
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function getFenologiaRiskTone(risk?: string | null) {
+  switch ((risk || "").toLowerCase()) {
+    case "alto":
+      return {
+        border: "border-red-800/60",
+        badge: "bg-red-950/70 text-red-300 border-red-800",
+      };
+    case "moderado":
+      return {
+        border: "border-amber-800/60",
+        badge: "bg-amber-950/70 text-amber-300 border-amber-800",
+      };
+    case "baixo":
+      return {
+        border: "border-emerald-800/60",
+        badge: "bg-emerald-950/70 text-emerald-300 border-emerald-800",
+      };
+    default:
+      return {
+        border: "border-slate-700",
+        badge: "bg-slate-900/70 text-slate-300 border-slate-700",
+      };
+  }
+}
+
+function getIisClassColor(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return "#475569";
+  if (value <= 1) return "#B91C1C";
+  if (value <= 2) return "#DC2626";
+  if (value <= 3) return "#F97316";
+  if (value <= 4) return "#FACC15";
+  if (value <= 5) return "#84CC16";
+  return "#16A34A";
+}
+
+function shortPhaseLabel(value?: string | null): string {
+  const phase = (value || "").toLowerCase();
+  if (!phase) return "—";
+  if (phase.includes("plant")) return "PL";
+  if (phase.includes("emerg")) return "EM";
+  if (phase.includes("desenvol")) return "DV";
+  if (phase.includes("veget")) return "VG";
+  if (phase.includes("ench")) return "EG";
+  if (phase.includes("flor")) return "FL";
+  if (phase.includes("matur")) return "MT";
+  if (phase.includes("colh")) return "CL";
+  return phase.slice(0, 2).toUpperCase();
+}
+
+function getHeatmapTone(risk?: string | null) {
+  switch ((risk || "").toLowerCase()) {
+    case "alto":
+      return {
+        active: "bg-red-500/20 border-red-700/70 text-red-200",
+        current: "ring-2 ring-red-400/80",
+      };
+    case "moderado":
+      return {
+        active: "bg-amber-500/20 border-amber-700/70 text-amber-200",
+        current: "ring-2 ring-amber-300/80",
+      };
+    case "baixo":
+      return {
+        active: "bg-emerald-500/20 border-emerald-700/70 text-emerald-200",
+        current: "ring-2 ring-emerald-300/80",
+      };
+    default:
+      return {
+        active: "bg-sky-500/20 border-sky-700/70 text-sky-200",
+        current: "ring-2 ring-sky-300/80",
+      };
+  }
+}
+
+type FenologiaHeatmapCell = {
+  month: number;
+  monthLabel: string;
+  isActive: boolean;
+  isCurrent: boolean;
+  shortLabel: string;
+  fullLabel: string;
+};
+
+function buildFenologiaHeatmap(fenologia?: FenologiaPayload | null): FenologiaHeatmapCell[] {
+  const start = fenologia?.janela_fase?.mes_inicio ?? null;
+  const end = fenologia?.janela_fase?.mes_fim ?? null;
+  const currentMonth = fenologia?.mes_referencia ?? null;
+  const fullLabel = formatPhaseLabel(fenologia?.fase_atual);
+
+  return MONTH_LABELS.map((label, idx) => {
+    const month = idx + 1;
+    let isActive = false;
+
+    if (start != null && end != null) {
+      if (start <= end) {
+        isActive = month >= start && month <= end;
+      } else {
+        isActive = month >= start || month <= end;
+      }
+    }
+
+    return {
+      month,
+      monthLabel: label,
+      isActive,
+      isCurrent: currentMonth === month,
+      shortLabel: isActive ? shortPhaseLabel(fenologia?.fase_atual) : "·",
+      fullLabel: isActive ? fullLabel : "Fora da janela ativa",
+    };
+  });
+}
+
 export default function AgroClimaPanel({
   selectedCodeMuni,
   selectedUf,
@@ -888,6 +1042,8 @@ export default function AgroClimaPanel({
   const [error, setError] = useState<string | null>(null);
   const [payload, setPayload] = useState<AgroClimaResponse | null>(null);
   const [iisHistory, setIisHistory] = useState<IisHistoryResponse | null>(null);
+  const [culturasEstado, setCulturasEstado] = useState<string[]>([]);
+  const [selectedCulture, setSelectedCulture] = useState<string>("");
 
   useEffect(() => {
     if (selectedUf) setUf(selectedUf);
@@ -921,16 +1077,59 @@ export default function AgroClimaPanel({
   }, [uf]);
 
   useEffect(() => {
+    async function loadCulturasEstado() {
+      if (!uf) {
+        setCulturasEstado([]);
+        setSelectedCulture("");
+        return;
+      }
+
+      try {
+        const res = await fetch(
+          `${API_BASE_URL}/agroclima/fenologia/culturas?uf=${encodeURIComponent(uf)}`,
+          { cache: "no-store" }
+        );
+
+        if (!res.ok) {
+          setCulturasEstado([]);
+          setSelectedCulture("");
+          return;
+        }
+
+        const data = await res.json();
+        const items = Array.isArray(data.items) ? data.items : [];
+        setCulturasEstado(items);
+        setSelectedCulture((current) =>
+          current && items.includes(current) ? current : items[0] ?? ""
+        );
+      } catch (err) {
+        console.error(err);
+        setCulturasEstado([]);
+        setSelectedCulture("");
+      }
+    }
+
+    loadCulturasEstado();
+  }, [uf]);
+
+  useEffect(() => {
     async function loadSerie() {
       if (!codeMuni) return;
       setLoading(true);
       setError(null);
 
       try {
+        const params = new URLSearchParams({
+          code_muni: codeMuni,
+        });
+
+        if (selectedCulture) params.set("cultura", selectedCulture);
+        if (selectedIisValue != null && Number.isFinite(selectedIisValue)) {
+          params.set("iis_valor", String(selectedIisValue));
+        }
+
         const res = await fetch(
-          `${API_BASE_URL}/agroclima/municipio?code_muni=${encodeURIComponent(
-            codeMuni
-          )}`,
+          `${API_BASE_URL}/agroclima/municipio?${params.toString()}`,
           { cache: "no-store" }
         );
         if (!res.ok) throw new Error("Falha ao carregar série agroclimática");
@@ -945,7 +1144,7 @@ export default function AgroClimaPanel({
       }
     }
     loadSerie();
-  }, [codeMuni]);
+  }, [codeMuni, selectedCulture, iisSnapshot, selectedWindow]);
 
   useEffect(() => {
     async function loadIisHistory() {
@@ -1075,9 +1274,21 @@ export default function AgroClimaPanel({
   const iisBars = useMemo(() => {
     if (!iisSnapshot) return [];
     return [
-      { label: "1m", value: iisSnapshot.iis_1m ?? null },
-      { label: "3m", value: iisSnapshot.iis_3m ?? null },
-      { label: "6m", value: iisSnapshot.iis_6m ?? null },
+      {
+        label: "1m",
+        value: iisSnapshot.iis_1m ?? null,
+        fill: getIisClassColor(iisSnapshot.iis_1m ?? null),
+      },
+      {
+        label: "3m",
+        value: iisSnapshot.iis_3m ?? null,
+        fill: getIisClassColor(iisSnapshot.iis_3m ?? null),
+      },
+      {
+        label: "6m",
+        value: iisSnapshot.iis_6m ?? null,
+        fill: getIisClassColor(iisSnapshot.iis_6m ?? null),
+      },
     ];
   }, [iisSnapshot]);
 
@@ -1144,6 +1355,15 @@ export default function AgroClimaPanel({
     tempMeanEnvelope,
     selectedIisValue,
   ]);
+
+  const latestMetrics = payload?.latest_metrics ?? null;
+  const fenologiaPayload = payload?.fenologia ?? null;
+  const fenologiaTone = getFenologiaRiskTone(fenologiaPayload?.risco ?? null);
+  const fenologiaHeatmap = useMemo(
+    () => buildFenologiaHeatmap(fenologiaPayload),
+    [fenologiaPayload]
+  );
+  const heatmapTone = getHeatmapTone(fenologiaPayload?.risco ?? null);
 
   const insightTone = getInsightToneClasses(climateInsight?.tone ?? "blue");
 
@@ -1297,6 +1517,183 @@ export default function AgroClimaPanel({
             </div>
           </div>
         </div>
+
+        <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900/45 p-4">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+            <div className="xl:col-span-5 rounded-2xl border border-slate-800 bg-slate-950/55 p-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-slate-400">
+                    Cultura de referência
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    Heatmap fenológico derivado da UF selecionada ({uf || "—"}).
+                  </div>
+                </div>
+                <div className="w-full md:max-w-[220px]">
+                  <select
+                    value={selectedCulture}
+                    onChange={(e) => setSelectedCulture(e.target.value)}
+                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                  >
+                    {culturasEstado.length === 0 && <option value="">Sem cultura cadastrada</option>}
+                    {culturasEstado.map((cultura) => (
+                      <option key={cultura} value={cultura}>
+                        {cultura}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900/45 p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <div className="text-xs uppercase tracking-wide text-slate-400">
+                    Calendário fenológico
+                  </div>
+                  <div className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${fenologiaTone.badge}`}>
+                    {fenologiaPayload?.risco ? `Risco ${fenologiaPayload.risco}` : "Sem fase ativa"}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-12 gap-1.5">
+                  {fenologiaHeatmap.map((cell) => (
+                    <div key={cell.month} className="space-y-1">
+                      <div className="text-center text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                        {cell.monthLabel}
+                      </div>
+                      <div
+                        title={cell.isActive ? `${cell.monthLabel}: ${cell.fullLabel}` : `${cell.monthLabel}: fora da janela ativa`}
+                        className={[
+                          "flex h-16 items-center justify-center rounded-xl border text-[11px] font-semibold transition-all",
+                          cell.isActive
+                            ? `${heatmapTone.active} ${cell.isCurrent ? heatmapTone.current : ""}`
+                            : "border-slate-800 bg-slate-900/40 text-slate-600",
+                        ].join(" ")}
+                      >
+                        {cell.shortLabel}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-slate-400">
+                  <span className="rounded-full border border-slate-700 bg-slate-900/60 px-2.5 py-1">
+                    Janela ativa: {fenologiaPayload?.janela_fase?.mes_inicio ?? "—"} → {fenologiaPayload?.janela_fase?.mes_fim ?? "—"}
+                  </span>
+                  <span className="rounded-full border border-slate-700 bg-slate-900/60 px-2.5 py-1">
+                    Mês de referência: {fenologiaPayload?.mes_referencia ?? "—"}
+                  </span>
+                  <span className="rounded-full border border-slate-700 bg-slate-900/60 px-2.5 py-1">
+                    Fase: {formatPhaseLabel(fenologiaPayload?.fase_atual)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="xl:col-span-7">
+              <div className="text-xs uppercase tracking-wide text-slate-400">
+                Leitura fenológica atual
+              </div>
+
+              {fenologiaPayload ? (
+                <div className={`mt-2 rounded-2xl border ${fenologiaTone.border} bg-slate-950/45 p-4`}>
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+                      <div className="text-xs text-slate-400">Cultura</div>
+                      <div className="mt-1 text-sm font-semibold text-white">
+                        {(fenologiaPayload.cultura ?? selectedCulture) || "—"}
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+                      <div className="text-xs text-slate-400">Fase atual</div>
+                      <div className="mt-1 text-sm font-semibold text-white">
+                        {formatPhaseLabel(fenologiaPayload.fase_atual)}
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+                      <div className="text-xs text-slate-400">Risco fenológico</div>
+                      <div className="mt-1">
+                        <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${fenologiaTone.badge}`}>
+                          {fenologiaPayload.risco ?? "—"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+                      <div className="text-xs text-slate-400">Score fenológico</div>
+                      <div className="mt-1 text-sm font-semibold text-white">
+                        {fenologiaPayload.score != null ? formatNumber(fenologiaPayload.score, 2) : "—"}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-12">
+                    <div className="xl:col-span-7 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+                      <div className="text-xs uppercase tracking-wide text-slate-400">
+                        Drivers fenológicos
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {(fenologiaPayload.drivers || []).length > 0 ? (
+                          (fenologiaPayload.drivers || []).map((driver) => (
+                            <span
+                              key={driver}
+                              className="rounded-full border border-slate-700 bg-slate-800/75 px-3 py-1.5 text-xs text-slate-200"
+                            >
+                              {driver}
+                            </span>
+                          ))
+                        ) : (
+                          <div className="rounded-lg border border-slate-800 bg-slate-800/55 px-3 py-2 text-sm text-slate-400">
+                            Sem drivers fenológicos suficientes para a leitura atual.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="xl:col-span-5 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+                      <div className="text-xs uppercase tracking-wide text-slate-400">
+                        Pesos e métricas recentes
+                      </div>
+                      <div className="mt-2 space-y-2 text-sm text-slate-200">
+                        <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-800/55 px-3 py-2">
+                          <span>Peso hídrico</span>
+                          <span>{formatNumber(fenologiaPayload.pesos?.hidrico, 2)}</span>
+                        </div>
+                        <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-800/55 px-3 py-2">
+                          <span>Peso térmico</span>
+                          <span>{formatNumber(fenologiaPayload.pesos?.termico, 2)}</span>
+                        </div>
+                        <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-800/55 px-3 py-2">
+                          <span>Peso IIS</span>
+                          <span>{formatNumber(fenologiaPayload.pesos?.iis, 2)}</span>
+                        </div>
+                        <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-800/55 px-3 py-2">
+                          <span>Anomalia de precipitação (30d)</span>
+                          <span>{formatNumber(latestMetrics?.precip_anomalia_pct_30d ?? latestMetrics?.precip_anomalia_30d, 2)}%</span>
+                        </div>
+                        <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-800/55 px-3 py-2">
+                          <span>Anomalia de temperatura (30d)</span>
+                          <span>{formatNumber(latestMetrics?.temp_anomalia_same_month ?? latestMetrics?.temp_anomalia_30d, 2)}°C</span>
+                        </div>
+                        <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-800/55 px-3 py-2">
+                          <span>IIS usado</span>
+                          <span>{formatNumber(latestMetrics?.iis_valor ?? selectedIisValue, 0)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-2 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-sm text-slate-400">
+                  Selecione uma cultura de referência para ativar a leitura fenológica no diagnóstico.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="mb-4 grid grid-cols-1 gap-4 xl:grid-cols-12">
@@ -1410,11 +1807,11 @@ export default function AgroClimaPanel({
                     {...chartTooltipStyle()}
                     formatter={(v: number | string) => formatNumber(Number(v), 0)}
                   />
-                  <Bar
-                    dataKey="value"
-                    radius={[8, 8, 0, 0]}
-                    fill={selectedWindowColor}
-                  />
+                  <Bar dataKey="value" radius={[8, 8, 0, 0]} isAnimationActive={false}>
+                    {iisBars.map((entry, index) => (
+                      <Cell key={`iis-cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
 
