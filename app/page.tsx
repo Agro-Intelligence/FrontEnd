@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useState } from "react";
 
 const HedgeEditorialPortal = dynamic(
@@ -25,9 +26,9 @@ export default function Page() {
   }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(34,197,94,0.14),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(56,189,248,0.10),_transparent_24%),linear-gradient(to_bottom,_#020617,_#0f172a,_#000000)] text-slate-100">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(34,197,94,0.12),_transparent_30%),linear-gradient(to_bottom,_#020617,_#0f172a,_#000000)] text-slate-100">
       <div className="mx-auto flex min-h-screen max-w-7xl flex-col px-6 py-8 md:px-10 lg:px-12">
-        <header className="flex flex-col gap-4 border-b border-slate-800/80 pb-6 md:flex-row md:items-center md:justify-between">
+        <header className="flex items-center justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.25em] text-emerald-300/80">
               Plataforma Analítica
@@ -35,57 +36,19 @@ export default function Page() {
             <h1 className="mt-2 text-2xl font-bold tracking-tight md:text-3xl">
               Agro Intelligence Engine
             </h1>
-            <p className="mt-2 max-w-2xl text-sm text-slate-400">
-              Inteligência aplicada ao agro para mercado, clima, produção e
-              tomada de decisão.
-            </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full border border-slate-700 bg-slate-900/80 px-4 py-2 text-xs text-slate-300">
-              V1 privada
-            </span>
-            <span className="rounded-full border border-emerald-800/70 bg-emerald-950/40 px-4 py-2 text-xs font-semibold text-emerald-300">
-              Hedge • Clima • Produção • Inteligência de Mercado
-            </span>
+          <div className="hidden rounded-full border border-emerald-800/70 bg-emerald-950/40 px-4 py-2 text-xs font-semibold text-emerald-300 md:block">
+            Hedge • Clima • Produção • Inteligência de Mercado
           </div>
         </header>
 
-        <section className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-3">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 px-4 py-3 shadow-lg backdrop-blur">
-            <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
-              Ambiente
-            </p>
-            <p className="mt-1 text-sm font-semibold text-slate-100">
-              Plataforma privada operacional
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 px-4 py-3 shadow-lg backdrop-blur">
-            <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
-              Núcleo de dados
-            </p>
-            <p className="mt-1 text-sm font-semibold text-slate-100">
-              CEPEA • B3 • Agroclima • Produção
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 px-4 py-3 shadow-lg backdrop-blur">
-            <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
-              Foco atual
-            </p>
-            <p className="mt-1 text-sm font-semibold text-emerald-300">
-              Basis, forecast e radar analítico
-            </p>
-          </div>
-        </section>
-
-        <section className="flex flex-1 items-center py-10 md:py-14">
+        <section className="flex flex-1 items-center py-10 md:py-16">
           <div className="grid w-full grid-cols-1 gap-10 lg:grid-cols-12 lg:items-center">
             <div className="lg:col-span-7">
               <div className="inline-flex items-center rounded-full border border-slate-700 bg-slate-900/70 px-4 py-2 text-xs text-slate-300 shadow-lg backdrop-blur">
                 <span className="mr-2 inline-block h-2 w-2 rounded-full bg-emerald-400" />
-                Ambiente estratégico em operação
+                Ambiente de demonstração estratégica
               </div>
 
               <h2 className="mt-6 max-w-4xl text-4xl font-bold leading-tight tracking-tight text-white md:text-5xl xl:text-6xl">
@@ -96,22 +59,29 @@ export default function Page() {
 
               <p className="mt-6 max-w-3xl text-base leading-7 text-slate-300 md:text-lg">
                 Uma plataforma consultiva para análise de commodities, hedge,
-                basis porto versus interior, risco agroclimático, produção
-                agrícola, sinais editoriais e inteligência territorial.
+                risco agroclimático, produção agrícola, sinais editoriais e
+                inteligência territorial
               </p>
 
-              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                 <button
                   type="button"
                   onClick={() => setEntered(true)}
-                  className="rounded-2xl bg-emerald-500 px-6 py-3.5 text-sm font-semibold text-slate-950 shadow-lg shadow-emerald-900/30 transition hover:bg-emerald-400"
+                  className="rounded-2xl bg-emerald-500 px-6 py-3 text-sm font-semibold text-slate-950 shadow-lg shadow-emerald-900/30 transition hover:bg-emerald-400"
                 >
                   Entrar na Plataforma
                 </button>
 
+                <Link
+                  href="/apresentacao"
+                  className="rounded-2xl border border-amber-700/80 bg-amber-950/40 px-6 py-3 text-center text-sm font-semibold text-amber-100 transition hover:border-amber-500 hover:bg-amber-950/60"
+                >
+                  Modo apresentação (roteiro guiado)
+                </Link>
+
                 <a
                   href="#visao-geral"
-                  className="rounded-2xl border border-slate-700 bg-slate-900/60 px-6 py-3.5 text-sm font-semibold text-slate-200 transition hover:border-slate-500 hover:bg-slate-800/70"
+                  className="rounded-2xl border border-slate-700 bg-slate-900/60 px-6 py-3 text-sm font-semibold text-slate-200 transition hover:border-slate-500 hover:bg-slate-800/70"
                 >
                   Ver visão geral
                 </a>
@@ -165,7 +135,7 @@ export default function Page() {
                     </div>
 
                     <div className="rounded-full border border-sky-800/70 bg-sky-950/40 px-3 py-1 text-xs font-semibold text-sky-300">
-                      Private
+                      Demo
                     </div>
                   </div>
 
@@ -176,7 +146,7 @@ export default function Page() {
                       </p>
                       <p className="mt-2 text-sm leading-6 text-slate-200">
                         Commodities, hedge, clima, produção, sentimento de
-                        mercado e inteligência editorial em uma visão única.
+                        mercado e inteligência editorial num único ambiente.
                       </p>
                     </div>
 
@@ -187,7 +157,7 @@ export default function Page() {
                         </p>
 
                         <div className="rounded-full border border-emerald-800 bg-emerald-950/50 px-3 py-1 text-xs font-semibold text-emerald-300">
-                          Monitoramento ativo
+                          Alta monitorada
                         </div>
                       </div>
 

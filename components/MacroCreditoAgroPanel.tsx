@@ -598,8 +598,8 @@ export default function MacroCreditoAgroPanel() {
                 <Tooltip
                   {...chartTooltipStyle()}
                   labelFormatter={(label) => formatDateOnly(String(label))}
-                  formatter={(value: number | string) => [
-                    `${formatNumber(Number(value), 2)}%`,
+                  formatter={(value: number | string | undefined) => [
+                    value == null ? "-" : `${formatNumber(Number(value), 2)}%`,
                     "SELIC",
                   ]}
                 />
@@ -644,8 +644,8 @@ export default function MacroCreditoAgroPanel() {
                 <Tooltip
                   {...chartTooltipStyle()}
                   labelFormatter={(label) => formatDateOnly(String(label))}
-                  formatter={(value: number | string) => [
-                    formatNumber(Number(value), 4),
+                  formatter={(value: number | string | undefined) => [
+                    value == null ? "-" : formatNumber(Number(value), 4),
                     "USD/BRL",
                   ]}
                 />
@@ -693,8 +693,8 @@ export default function MacroCreditoAgroPanel() {
                 <Tooltip
                   {...chartTooltipStyle()}
                   labelFormatter={(label) => formatDateOnly(String(label))}
-                  formatter={(value: number | string) => [
-                    `${formatNumber(Number(value), 2)}%`,
+                  formatter={(value: number | string | undefined) => [
+                    value == null ? "-" : `${formatNumber(Number(value), 2)}%`,
                     `IPCA ${overview?.ipca_reference_year ?? "2026"}`,
                   ]}
                 />

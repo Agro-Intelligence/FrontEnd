@@ -17,9 +17,38 @@ import {
   BarChart,
   Bar,
 } from "recharts";
-import AgroProductionPanel from "@/components/AgroProductionPanel";
-import AgroClimaPanel from "@/components/AgroClimaPanel";
-import MacroCreditoAgroPanel from "@/components/MacroCreditoAgroPanel";
+const AgroProductionPanel = dynamic(
+  () => import("@/components/AgroProductionPanel"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-sm text-slate-300">
+        Carregando painel de produção...
+      </div>
+    ),
+  }
+);
+
+const AgroClimaPanel = dynamic(() => import("@/components/AgroClimaPanel"), {
+  ssr: false,
+  loading: () => (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-sm text-slate-300">
+      Carregando painel agroclimático...
+    </div>
+  ),
+});
+
+const MacroCreditoAgroPanel = dynamic(
+  () => import("@/components/MacroCreditoAgroPanel"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-sm text-slate-300">
+        Carregando painel macro & crédito...
+      </div>
+    ),
+  }
+);
 
 const MunicipalRiskMap = dynamic(
   () => import("@/components/MunicipalRiskMap"),
@@ -33,10 +62,14 @@ const SILVER = "#C9CED6";
 const FORECAST_GREEN = "#22C55E";
 const MA30_ORANGE = "#F59E0B";
 
-type PortalTab = "mercado" | "macro" | "mapa" | "producao";
+export type PortalTab = "mercado" | "macro" | "mapa" | "producao";
 
 type HedgeEditorialPortalProps = {
   onGoHome?: () => void;
+  /** Roteiro numerado para reuniões e onboarding; mesmo acesso para todos; não altera dados. */
+  presentationMode?: boolean;
+  /** Aba inicial (ex.: URL ?tab=macro). */
+  initialTab?: PortalTab;
 };
 
 type AssetItem = {
@@ -686,13 +719,19 @@ function getArbitrageBadge(signal: ArbitrageSignal | null): string {
 
 export default function HedgeEditorialPortal({
   onGoHome,
+  presentationMode = false,
+  initialTab = "mercado",
 }: HedgeEditorialPortalProps) {
   const router = useRouter();
   const pathname = usePathname();
 
   const [assets, setAssets] = useState<AssetItem[]>([]);
   const [selectedSymbol, setSelectedSymbol] = useState<string>("ICF");
-  const [activeTab, setActiveTab] = useState<PortalTab>("mercado");
+  const [activeTab, setActiveTab] = useState<PortalTab>(initialTab);
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
 
   const [continuous, setContinuous] = useState<ContinuousResponse | null>(null);
   const [compare, setCompare] = useState<CompareResponse | null>(null);
@@ -948,7 +987,11 @@ export default function HedgeEditorialPortal({
         data = null;
       }
 
-      if (!res.ok || data?.status !== "ok") {
+      const statusNorm = String(data?.status ?? "").toLowerCase();
+      const cepeaSucceeded =
+        statusNorm === "ok" || statusNorm === "ok_fallback_local_rebuild";
+
+      if (!res.ok || !cepeaSucceeded) {
         const detail =
           (typeof data?.detail === "string" && data.detail) ||
           (typeof data?.message === "string" && data.message) ||
@@ -956,14 +999,14 @@ export default function HedgeEditorialPortal({
         throw new Error(detail);
       }
 
-      setCepeaActionMessage("Atualização CEPEA concluída com sucesso.");
+      setCepeaActionMessage(
+        statusNorm === "ok_fallback_local_rebuild"
+          ? "CEPEA atualizado (rebuild local a partir dos arquivos em data/raw/cepea_spot)."
+          : "Atualização CEPEA concluída com sucesso."
+      );
       setCepeaStatus(data);
 
-      await Promise.all([
-        fetchSoySpreadLatest(),
-        fetchSoySpreadSeries(),
-        fetchCepeaStatus(),
-      ]);
+      await fetchCepeaStatus();
 
       if (selectedSymbol) {
         await loadDashboard(selectedSymbol);
@@ -995,9 +1038,29 @@ export default function HedgeEditorialPortal({
         fetchForecast(symbol, bestModel),
         fetchStrategy(symbol),
         fetchSentiment(symbol),
-        fetchSoySpreadLatest(),
-        fetchSoySpreadSeries(),
       ]);
+
+      try {
+        await fetchSoySpreadLatest();
+        await fetchSoySpreadSeries();
+      } catch (spreadError) {
+        console.error(spreadError);
+        setSoySpreadLatest({
+          spread: "soy_porto_vs_interior",
+          date: null,
+          spot_port_brl: null,
+          spot_interior_brl: null,
+          spread_logistico_brl: null,
+          spread_logistico_pct: null,
+        });
+        setSoySpreadSeries({
+          spread: "soy_porto_vs_interior",
+          location_port: "Paranaguá",
+          location_interior: "Paraná",
+          points_count: 0,
+          items: [],
+        });
+      }
 
       fetchBacktest(symbol);
     } catch (error) {
@@ -1264,6 +1327,11 @@ export default function HedgeEditorialPortal({
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              {presentationMode && (
+                <span className="rounded-full border border-amber-700/80 bg-amber-950/50 px-3 py-1 text-xs font-semibold text-amber-200">
+                  Modo apresentação
+                </span>
+              )}
               <span className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs text-slate-400">
                 V1 privada
               </span>
@@ -1276,6 +1344,53 @@ export default function HedgeEditorialPortal({
       </header>
 
       <div className="mx-auto max-w-7xl px-4 py-6 md:px-6 lg:px-8">
+        {presentationMode && (
+          <div className="mb-6 rounded-2xl border border-amber-800/50 bg-amber-950/25 px-4 py-4 text-sm text-slate-200 shadow-lg">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300/90">
+              Roteiro sugerido
+            </p>
+            <p className="mt-2 text-xs leading-relaxed text-slate-400">
+              Acesso para toda a equipe — mesmo conteúdo do terminal; aqui a navegação
+              fica numerada para reuniões e onboarding. Siga as abas na ordem ou
+              abra uma etapa com o parâmetro de URL{" "}
+              <code className="rounded bg-slate-900 px-1.5 py-0.5 text-amber-100/90">
+                ?tab=mercado
+              </code>{" "}
+              ·{" "}
+              <code className="rounded bg-slate-900 px-1.5 py-0.5 text-amber-100/90">
+                macro
+              </code>{" "}
+              ·{" "}
+              <code className="rounded bg-slate-900 px-1.5 py-0.5 text-amber-100/90">
+                mapa
+              </code>{" "}
+              ·{" "}
+              <code className="rounded bg-slate-900 px-1.5 py-0.5 text-amber-100/90">
+                producao
+              </code>
+              .
+            </p>
+            <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-slate-200">
+              <li>
+                <strong className="text-emerald-300/95">Mercado futuro</strong> — séries
+                contínuas, forecast, estratégia, backtest e sentimento.
+              </li>
+              <li>
+                <strong className="text-cyan-300/95">Macro &amp; crédito agro</strong> —
+                regime macro e leitura de financiamento ao agronegócio.
+              </li>
+              <li>
+                <strong className="text-sky-300/95">Mapa agroclimático</strong> — risco
+                territorial e monitoramento municipal.
+              </li>
+              <li>
+                <strong className="text-fuchsia-300/95">Produção agrícola</strong> —
+                safras, histórico e comparativos por UF.
+              </li>
+            </ol>
+          </div>
+        )}
+
         <div className="mb-6 flex flex-wrap gap-2">
           <button
             type="button"
@@ -1286,6 +1401,7 @@ export default function HedgeEditorialPortal({
                 : "border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-500"
             }`}
           >
+            {presentationMode ? "1 · " : ""}
             Mercado Futuro
           </button>
 
@@ -1298,6 +1414,7 @@ export default function HedgeEditorialPortal({
                 : "border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-500"
             }`}
           >
+            {presentationMode ? "2 · " : ""}
             Macro & Crédito Agro
           </button>
 
@@ -1310,6 +1427,7 @@ export default function HedgeEditorialPortal({
                 : "border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-500"
             }`}
           >
+            {presentationMode ? "3 · " : ""}
             Mapa Agroclimático
           </button>
 
@@ -1322,6 +1440,7 @@ export default function HedgeEditorialPortal({
                 : "border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-500"
             }`}
           >
+            {presentationMode ? "4 · " : ""}
             Produção Agrícola
           </button>
         </div>
@@ -2066,8 +2185,8 @@ export default function HedgeEditorialPortal({
                                 />
                                 <Tooltip
                                   {...chartTooltipStyle()}
-                                  formatter={(value: number | string) => [
-                                    `${formatNumber(Number(value), 1)}%`,
+                                  formatter={(value) => [
+                                    value == null ? "-" : `${formatNumber(Number(value), 1)}%`,
                                     "Directional Accuracy",
                                   ]}
                                 />
@@ -2411,16 +2530,13 @@ export default function HedgeEditorialPortal({
                             labelFormatter={(label) =>
                               formatShortDate(String(label))
                             }
-                            formatter={(
-                              value: number | string,
-                              name: string
-                            ) => {
+                            formatter={(value, name) => {
                               if (
                                 String(name) === "Basis" ||
                                 String(name) === "spread_logistico_brl"
                               ) {
                                 return [
-                                  `${formatNumber(Number(value), 2)} R$/saca`,
+                                  value == null ? "-" : `${formatNumber(Number(value), 2)} R$/saca`,
                                   "Basis",
                                 ];
                               }
@@ -2429,11 +2545,11 @@ export default function HedgeEditorialPortal({
                                 String(name) === "ma30_brl"
                               ) {
                                 return [
-                                  `${formatNumber(Number(value), 2)} R$/saca`,
+                                  value == null ? "-" : `${formatNumber(Number(value), 2)} R$/saca`,
                                   "MA30",
                                 ];
                               }
-                              return [formatNumber(Number(value), 2), String(name)];
+                              return [value == null ? "-" : formatNumber(Number(value), 2), String(name ?? "")];
                             }}
                           />
                           <Legend />

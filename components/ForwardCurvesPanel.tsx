@@ -429,18 +429,23 @@ export default function ForwardCurvesPanel({
                 />
                 <Tooltip
                   {...chartTooltipStyle()}
-                  formatter={(value: number | string, name: string, entry) => {
+                  formatter={(value, name, entry) => {
                     const row = entry?.payload as CurveChartPoint | undefined;
                     const basis = row?.price_basis ? ` (${row.price_basis})` : "";
 
                     const label =
-                      String(name) === "settlement"
+                      String(name ?? "") === "settlement"
                         ? `Settlement${basis}`
-                        : String(name) === "spot"
+                        : String(name ?? "") === "spot"
                         ? `Spot${basis}`
-                        : String(name);
+                        : String(name ?? "");
 
-                    return [formatNumber(Number(value), 2), label];
+                    const safeValue =
+                      value === undefined || value === null
+                        ? "-"
+                        : formatNumber(Number(value), 2);
+
+                    return [safeValue, label] as [string, string];
                   }}
                   labelFormatter={(label, payload) => {
                     const row = payload?.[0]?.payload as

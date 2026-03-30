@@ -1005,7 +1005,7 @@ export default function AgroProductionPanel() {
                     />
                     <Tooltip
                       {...chartTooltipStyle()}
-                      formatter={(value: number | string, name: string) => {
+                      formatter={(value: number | string | undefined, name: string | undefined) => {
                         const label =
                           String(name).includes("IBGE")
                             ? "IBGE"
@@ -1013,12 +1013,17 @@ export default function AgroProductionPanel() {
                             ? "CONAB"
                             : String(name);
 
-                        return [
+                        const formattedValue =
                           chartMetric === "produtividade"
-                            ? formatNumber(Number(value), 2)
-                            : formatInteger(Number(value)),
-                          label,
-                        ];
+                            ? formatNumber(
+                                typeof value === "number" ? value : Number(value),
+                                2
+                              )
+                            : formatInteger(
+                                typeof value === "number" ? value : Number(value)
+                              );
+
+                        return [formattedValue, label] as [string, string];
                       }}
                     />
                     <Legend />

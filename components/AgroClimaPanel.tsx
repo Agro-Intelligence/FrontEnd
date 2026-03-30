@@ -17,8 +17,15 @@ import {
   Legend,
 } from "recharts";
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000";
+/** Preferir 127.0.0.1 no .env: em alguns Windows `localhost` resolve para IPv6 e o fetch falha se o API só escuta em IPv4. */
+const API_BASE_URL = (() => {
+  const raw = process.env.NEXT_PUBLIC_API_BASE_URL;
+  if (typeof raw === "string") {
+    const t = raw.trim();
+    if (t.startsWith("http")) return t.replace(/\/$/, "");
+  }
+  return "http://127.0.0.1:8000";
+})();
 
 const MONTH_LABELS = [
   "Jan",
@@ -40,6 +47,19 @@ const IIS_LINE_COLORS: Record<1 | 3 | 6, string> = {
   3: "#F59E0B",
   6: "#22C55E",
 };
+
+/** Legendas dos tokens usados nos códigos mensais CONAB — ordem fenológica (5=F, 6=FM) */
+const CONAB_FASE_LEGENDA: { sigla: string; nome: string }[] = [
+  { sigla: "PS", nome: "Pré-semeadura" },
+  { sigla: "S", nome: "Semeadura" },
+  { sigla: "E", nome: "Emergência" },
+  { sigla: "DV", nome: "Desenvolvimento vegetativo" },
+  { sigla: "F", nome: "Floração" },
+  { sigla: "FM", nome: "Formação de maçãs" },
+  { sigla: "EG", nome: "Enchimento de grãos" },
+  { sigla: "M", nome: "Maturação" },
+  { sigla: "C", nome: "Colheita" },
+];
 
 type MunicipioOption = {
   code_muni: string;
@@ -66,6 +86,27 @@ type AgroClimaRow = {
   [key: string]: unknown;
 };
 
+type ClimaVsMedia = "abaixo" | "acima" | "proximo";
+
+type FenologiaClimaMes = {
+  ano_referencia?: number | null;
+  temp_vs_media?: ClimaVsMedia | null;
+  precip_vs_media?: ClimaVsMedia | null;
+  temp_media_ultimo_ano?: number | null;
+  temp_media_climatologia?: number | null;
+  precip_ultimo_ano?: number | null;
+  precip_climatologia?: number | null;
+};
+
+type FenologiaCalendarioMes = {
+  month?: number;
+  codigo?: string | null;
+  ativo?: boolean;
+  rotulo_curto?: string | null;
+  rotulo_completo?: string | null;
+  clima?: FenologiaClimaMes | null;
+};
+
 type FenologiaPayload = {
   fase_atual?: string;
   cultura?: string;
@@ -75,27 +116,34 @@ type FenologiaPayload = {
     mes_inicio?: number | null;
     mes_fim?: number | null;
   } | null;
-  score?: number | null;
-  risco?: string;
-  drivers?: string[];
-  pesos?: {
-    hidrico?: number | null;
-    termico?: number | null;
-    iis?: number | null;
-  } | null;
-  flags?: {
-    stress_hidrico?: number | null;
-    stress_termico?: number | null;
-    seca_estrutural?: number | null;
-  } | null;
+  /** Calendário mensal (CONAB): mês a mês com código fenológico */
+  calendario_mensal?: FenologiaCalendarioMes[] | null;
+  safra_referencia?: string | null;
+  mesorregiao_referencia?: string | null;
+  fonte_fenologia?: string | null;
+  codigo_conab_mes?: string | null;
+  /** Último ano usado nos comparativos climáticos do calendário */
+  ano_clima_referencia?: number | null;
+  clima_metodologia?: string | null;
+  /** Aba da planilha CONAB (ex.: conab_plantio_municipios) */
+  fonte_planilha?: string | null;
+  nome_municipio_conab?: string | null;
 };
 
 type LatestMetricsPayload = {
   precip_anomalia_30d?: number | null;
   precip_acum_30d?: number | null;
+  precip_anomalia_pct_30d?: number | null;
   temp_anomalia_30d?: number | null;
+  temp_anomalia_same_month?: number | null;
   temp_media_30d?: number | null;
   iis_valor?: number | null;
+};
+
+type FenologiaCulturaOpcao = {
+  cultura: string;
+  /** Texto no seletor — coluna `cultura` CONAB (igual a `cultura`) */
+  label: string;
 };
 
 type AgroClimaResponse = {
@@ -105,6 +153,15 @@ type AgroClimaResponse = {
     abbrev_state: string;
     code_state?: string;
   };
+  /** Lista CONAB (aba municípios), alinhada ao IBGE resolvido na série */
+  fenologia_culturas?: string[] | null;
+  /** Mesmas culturas com rótulo PAM para o seletor */
+  fenologia_culturas_ui?: FenologiaCulturaOpcao[] | null;
+  filters?: {
+    cultura?: string | null;
+    code_muni?: string | null;
+    abbrev_state?: string | null;
+  } | null;
   summary?: {
     rows: number;
     date_min: string;
@@ -222,6 +279,62 @@ function formatNumber(value: number | null | undefined, digits = 2) {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   });
+}
+
+/** Alinha com o backend IBGE 7 dígitos (evita falha ao cruzar com CONAB). */
+function normalizeIbgeMuniCode(code: string | null | undefined): string {
+  if (code == null || code === "") return "";
+  const s = String(code).replace(/\.0$/, "").trim();
+  if (!/^\d+$/.test(s)) return s;
+  return s.padStart(7, "0");
+}
+
+function normalizeIbgeDigitsLoose(code: string | null | undefined): string {
+  if (code == null || code === "") return "";
+  const s = String(code).replace(/\D/g, "");
+  if (!s) return "";
+  return s.padStart(7, "0").slice(-7);
+}
+
+/** Lista do select: ordem e tamanho vêm de `items`; rótulos de `items_ui`. Descarta JSON de outro município (corrida entre fetches). */
+function parseFenologiaCulturasResponse(
+  data: Record<string, unknown>,
+  codeMuniExpected: string
+): FenologiaCulturaOpcao[] {
+  const expected = normalizeIbgeDigitsLoose(codeMuniExpected);
+  const fromApi = normalizeIbgeDigitsLoose(String(data.code_muni ?? ""));
+  if (expected && fromApi && fromApi !== expected) {
+    return [];
+  }
+
+  const itemsRaw = data.items;
+  const items_ui = Array.isArray(data.items_ui)
+    ? (data.items_ui as { cultura?: unknown; label?: unknown }[])
+    : [];
+
+  const labelBy = new Map<string, string>();
+  for (const row of items_ui) {
+    const c = String(row?.cultura ?? "").trim();
+    if (!c) continue;
+    labelBy.set(c, String(row?.label ?? row.cultura ?? c).trim());
+  }
+
+  if (Array.isArray(itemsRaw) && itemsRaw.length > 0) {
+    return itemsRaw
+      .map((x) => String(x ?? "").trim())
+      .filter(Boolean)
+      .map((cultura) => ({
+        cultura,
+        label: labelBy.get(cultura) ?? cultura,
+      }));
+  }
+
+  return items_ui
+    .map((row) => ({
+      cultura: String(row?.cultura ?? "").trim(),
+      label: String(row?.label ?? row.cultura ?? "").trim(),
+    }))
+    .filter((o) => o.cultura);
 }
 
 function chartTooltipStyle() {
@@ -913,29 +1026,23 @@ function formatPhaseLabel(value?: string | null) {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function getFenologiaRiskTone(risk?: string | null) {
-  switch ((risk || "").toLowerCase()) {
-    case "alto":
-      return {
-        border: "border-red-800/60",
-        badge: "bg-red-950/70 text-red-300 border-red-800",
-      };
-    case "moderado":
-      return {
-        border: "border-amber-800/60",
-        badge: "bg-amber-950/70 text-amber-300 border-amber-800",
-      };
-    case "baixo":
-      return {
-        border: "border-emerald-800/60",
-        badge: "bg-emerald-950/70 text-emerald-300 border-emerald-800",
-      };
-    default:
-      return {
-        border: "border-slate-700",
-        badge: "bg-slate-900/70 text-slate-300 border-slate-700",
-      };
-  }
+const FENOLOGIA_PANEL_TONE = {
+  border: "border-slate-700/80",
+  badge: "bg-slate-900/70 text-slate-300 border-slate-600",
+} as const;
+
+function climaTempBarClass(v?: ClimaVsMedia | null): string {
+  if (v === "abaixo") return "bg-sky-500";
+  if (v === "acima") return "bg-orange-500";
+  if (v === "proximo") return "bg-slate-500";
+  return "bg-slate-800";
+}
+
+function climaPrecipBarClass(v?: ClimaVsMedia | null): string {
+  if (v === "abaixo") return "bg-amber-700";
+  if (v === "acima") return "bg-cyan-500";
+  if (v === "proximo") return "bg-slate-500";
+  return "bg-slate-800";
 }
 
 function getIisClassColor(value: number | null | undefined): string {
@@ -951,40 +1058,18 @@ function getIisClassColor(value: number | null | undefined): string {
 function shortPhaseLabel(value?: string | null): string {
   const phase = (value || "").toLowerCase();
   if (!phase) return "—";
+  if (phase.includes("pre_semead") || phase.includes("presemead") || phase.includes("pré-semead"))
+    return "PS";
   if (phase.includes("plant")) return "PL";
   if (phase.includes("emerg")) return "EM";
   if (phase.includes("desenvol")) return "DV";
   if (phase.includes("veget")) return "VG";
+  if (phase.includes("formacao_mac") || phase.includes("macas")) return "FM";
   if (phase.includes("ench")) return "EG";
   if (phase.includes("flor")) return "FL";
   if (phase.includes("matur")) return "MT";
   if (phase.includes("colh")) return "CL";
   return phase.slice(0, 2).toUpperCase();
-}
-
-function getHeatmapTone(risk?: string | null) {
-  switch ((risk || "").toLowerCase()) {
-    case "alto":
-      return {
-        active: "bg-red-500/20 border-red-700/70 text-red-200",
-        current: "ring-2 ring-red-400/80",
-      };
-    case "moderado":
-      return {
-        active: "bg-amber-500/20 border-amber-700/70 text-amber-200",
-        current: "ring-2 ring-amber-300/80",
-      };
-    case "baixo":
-      return {
-        active: "bg-emerald-500/20 border-emerald-700/70 text-emerald-200",
-        current: "ring-2 ring-emerald-300/80",
-      };
-    default:
-      return {
-        active: "bg-sky-500/20 border-sky-700/70 text-sky-200",
-        current: "ring-2 ring-sky-300/80",
-      };
-  }
 }
 
 type FenologiaHeatmapCell = {
@@ -994,13 +1079,85 @@ type FenologiaHeatmapCell = {
   isCurrent: boolean;
   shortLabel: string;
   fullLabel: string;
+  climaDisponivel: boolean;
+  tempVs: ClimaVsMedia | null;
+  precipVs: ClimaVsMedia | null;
+  climaTooltip?: string;
 };
 
+function buildClimaCellTooltip(
+  monthLabel: string,
+  clima: FenologiaClimaMes | null | undefined
+): string | undefined {
+  if (!clima) return undefined;
+  const bits: string[] = [];
+  if (
+    clima.temp_media_ultimo_ano != null &&
+    clima.temp_media_climatologia != null &&
+    clima.temp_vs_media
+  ) {
+    bits.push(
+      `T média ${formatNumber(clima.temp_media_ultimo_ano, 1)}°C vs clim. ${formatNumber(
+        clima.temp_media_climatologia,
+        1
+      )}°C (${clima.temp_vs_media})`
+    );
+  }
+  if (
+    clima.precip_ultimo_ano != null &&
+    clima.precip_climatologia != null &&
+    clima.precip_vs_media
+  ) {
+    bits.push(
+      `Precip ${formatNumber(clima.precip_ultimo_ano, 0)} mm vs clim. ${formatNumber(
+        clima.precip_climatologia,
+        0
+      )} mm (${clima.precip_vs_media})`
+    );
+  }
+  if (clima.ano_referencia != null) {
+    bits.push(`ano série: ${clima.ano_referencia}`);
+  }
+  if (!bits.length) return undefined;
+  return `${monthLabel}: ${bits.join(" · ")}`;
+}
+
 function buildFenologiaHeatmap(fenologia?: FenologiaPayload | null): FenologiaHeatmapCell[] {
+  const currentMonth = fenologia?.mes_referencia ?? null;
+  const fullLabelFase = formatPhaseLabel(fenologia?.fase_atual);
+  const cal = fenologia?.calendario_mensal;
+
+  if (Array.isArray(cal) && cal.length === 12) {
+    return MONTH_LABELS.map((label, idx) => {
+      const month = idx + 1;
+      const cell = cal[idx];
+      const isActive = Boolean(cell?.ativo);
+      const shortLabel =
+        (cell?.rotulo_curto && String(cell.rotulo_curto).trim()) ||
+        (isActive ? shortPhaseLabel(fenologia?.fase_atual) : "·");
+      const fullLabel =
+        (cell?.rotulo_completo && String(cell.rotulo_completo).trim()) ||
+        (isActive ? fullLabelFase : "Sem estágio CONAB neste mês");
+      const clim = cell?.clima;
+      const climaDisponivel = Boolean(clim && (clim.temp_vs_media || clim.precip_vs_media));
+
+      return {
+        month,
+        monthLabel: label,
+        isActive,
+        isCurrent: currentMonth === month,
+        shortLabel,
+        fullLabel,
+        climaDisponivel,
+        tempVs: (clim?.temp_vs_media as ClimaVsMedia | null) ?? null,
+        precipVs: (clim?.precip_vs_media as ClimaVsMedia | null) ?? null,
+        climaTooltip: buildClimaCellTooltip(label, clim ?? null),
+      };
+    });
+  }
+
   const start = fenologia?.janela_fase?.mes_inicio ?? null;
   const end = fenologia?.janela_fase?.mes_fim ?? null;
-  const currentMonth = fenologia?.mes_referencia ?? null;
-  const fullLabel = formatPhaseLabel(fenologia?.fase_atual);
 
   return MONTH_LABELS.map((label, idx) => {
     const month = idx + 1;
@@ -1020,7 +1177,10 @@ function buildFenologiaHeatmap(fenologia?: FenologiaPayload | null): FenologiaHe
       isActive,
       isCurrent: currentMonth === month,
       shortLabel: isActive ? shortPhaseLabel(fenologia?.fase_atual) : "·",
-      fullLabel: isActive ? fullLabel : "Fora da janela ativa",
+      fullLabel: isActive ? fullLabelFase : "Fora da janela ativa",
+      climaDisponivel: false,
+      tempVs: null,
+      precipVs: null,
     };
   });
 }
@@ -1042,18 +1202,71 @@ export default function AgroClimaPanel({
   const [error, setError] = useState<string | null>(null);
   const [payload, setPayload] = useState<AgroClimaResponse | null>(null);
   const [iisHistory, setIisHistory] = useState<IisHistoryResponse | null>(null);
-  const [culturasEstado, setCulturasEstado] = useState<string[]>([]);
+  const [culturasOpcoes, setCulturasOpcoes] = useState<FenologiaCulturaOpcao[]>(
+    []
+  );
   const [selectedCulture, setSelectedCulture] = useState<string>("");
+
+  const selectedWindowKey = getWindowKey(selectedWindow);
+  const selectedIisValue = iisSnapshot?.[selectedWindowKey] ?? null;
 
   useEffect(() => {
     if (selectedUf) setUf(selectedUf);
   }, [selectedUf]);
 
   useEffect(() => {
-    if (selectedCodeMuni !== undefined && selectedCodeMuni !== null) {
-      setCodeMuni(selectedCodeMuni);
+    if (selectedCodeMuni == null || selectedCodeMuni === "") {
+      setCodeMuni("");
+      setCulturasOpcoes([]);
+      setSelectedCulture("");
+      return;
     }
+    setCulturasOpcoes([]);
+    setCodeMuni(normalizeIbgeMuniCode(selectedCodeMuni));
+    setSelectedCulture("");
   }, [selectedCodeMuni]);
+
+  /** Lista de culturas CONAB independente da série ERA5 (evita sumir o select se /municipio falhar ou vier sem fenologia). */
+  useEffect(() => {
+    if (!codeMuni) return;
+
+    let cancelled = false;
+
+    async function loadCulturasConab() {
+      try {
+        const params = new URLSearchParams({
+          code_muni: codeMuni,
+        });
+        if (uf) params.set("uf", uf);
+        const res = await fetch(
+          `${API_BASE_URL}/agroclima/fenologia/culturas?${params.toString()}`,
+          {
+            cache: "no-store",
+            headers: { Accept: "application/json" },
+          }
+        );
+        if (!res.ok || cancelled) return;
+        const raw = (await res.json()) as Record<string, unknown>;
+        const opcoes = parseFenologiaCulturasResponse(raw, codeMuni);
+        if (cancelled) return;
+
+        setCulturasOpcoes(opcoes);
+        setSelectedCulture((prev) => {
+          if (opcoes.length === 0) return "";
+          const ids = opcoes.map((o) => o.cultura);
+          if (prev && ids.includes(prev)) return prev;
+          return opcoes[0].cultura;
+        });
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    loadCulturasConab();
+    return () => {
+      cancelled = true;
+    };
+  }, [codeMuni, uf]);
 
   useEffect(() => {
     async function loadMunicipios() {
@@ -1077,44 +1290,16 @@ export default function AgroClimaPanel({
   }, [uf]);
 
   useEffect(() => {
-    async function loadCulturasEstado() {
-      if (!uf) {
-        setCulturasEstado([]);
-        setSelectedCulture("");
-        return;
-      }
-
-      try {
-        const res = await fetch(
-          `${API_BASE_URL}/agroclima/fenologia/culturas?uf=${encodeURIComponent(uf)}`,
-          { cache: "no-store" }
-        );
-
-        if (!res.ok) {
-          setCulturasEstado([]);
-          setSelectedCulture("");
-          return;
-        }
-
-        const data = await res.json();
-        const items = Array.isArray(data.items) ? data.items : [];
-        setCulturasEstado(items);
-        setSelectedCulture((current) =>
-          current && items.includes(current) ? current : items[0] ?? ""
-        );
-      } catch (err) {
-        console.error(err);
-        setCulturasEstado([]);
-        setSelectedCulture("");
-      }
+    if (!codeMuni) {
+      setPayload(null);
+      setCulturasOpcoes([]);
+      setSelectedCulture("");
+      setLoading(false);
+      setError(null);
+      return;
     }
 
-    loadCulturasEstado();
-  }, [uf]);
-
-  useEffect(() => {
     async function loadSerie() {
-      if (!codeMuni) return;
       setLoading(true);
       setError(null);
 
@@ -1123,6 +1308,7 @@ export default function AgroClimaPanel({
           code_muni: codeMuni,
         });
 
+        if (uf) params.set("abbrev_state", uf);
         if (selectedCulture) params.set("cultura", selectedCulture);
         if (selectedIisValue != null && Number.isFinite(selectedIisValue)) {
           params.set("iis_valor", String(selectedIisValue));
@@ -1133,7 +1319,7 @@ export default function AgroClimaPanel({
           { cache: "no-store" }
         );
         if (!res.ok) throw new Error("Falha ao carregar série agroclimática");
-        const data = await res.json();
+        const data: AgroClimaResponse = await res.json();
         setPayload(data);
       } catch (err) {
         console.error(err);
@@ -1144,7 +1330,14 @@ export default function AgroClimaPanel({
       }
     }
     loadSerie();
-  }, [codeMuni, selectedCulture, iisSnapshot, selectedWindow]);
+  }, [
+    uf,
+    codeMuni,
+    selectedCulture,
+    selectedIisValue,
+    iisSnapshot,
+    selectedWindow,
+  ]);
 
   useEffect(() => {
     async function loadIisHistory() {
@@ -1293,9 +1486,7 @@ export default function AgroClimaPanel({
   }, [iisSnapshot]);
 
   const selectedWindowLabel = getWindowLabel(selectedWindow);
-  const selectedWindowKey = getWindowKey(selectedWindow);
   const selectedWindowColor = IIS_LINE_COLORS[selectedWindow];
-  const selectedIisValue = iisSnapshot?.[selectedWindowKey] ?? null;
 
   const iisHistorySeries = useMemo(() => iisHistory?.series || [], [iisHistory]);
   const iisGeoData = useMemo(
@@ -1358,12 +1549,10 @@ export default function AgroClimaPanel({
 
   const latestMetrics = payload?.latest_metrics ?? null;
   const fenologiaPayload = payload?.fenologia ?? null;
-  const fenologiaTone = getFenologiaRiskTone(fenologiaPayload?.risco ?? null);
   const fenologiaHeatmap = useMemo(
     () => buildFenologiaHeatmap(fenologiaPayload),
     [fenologiaPayload]
   );
-  const heatmapTone = getHeatmapTone(fenologiaPayload?.risco ?? null);
 
   const insightTone = getInsightToneClasses(climateInsight?.tone ?? "blue");
 
@@ -1521,25 +1710,60 @@ export default function AgroClimaPanel({
         <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900/45 p-4">
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
             <div className="xl:col-span-5 rounded-2xl border border-slate-800 bg-slate-950/55 p-4">
-              <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-                <div>
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0 flex-1">
                   <div className="text-xs uppercase tracking-wide text-slate-400">
                     Cultura de referência
                   </div>
-                  <div className="mt-1 text-xs text-slate-500">
-                    Heatmap fenológico derivado da UF selecionada ({uf || "—"}).
-                  </div>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                    Calendário fenológico CONAB
+                    {fenologiaPayload?.safra_referencia
+                      ? ` · safra ${fenologiaPayload.safra_referencia}`
+                      : ""}
+                    {fenologiaPayload?.nome_municipio_conab
+                      ? ` · ${fenologiaPayload.nome_municipio_conab}`
+                      : payload?.municipio?.name_muni && codeMuni
+                        ? ` · ${payload.municipio.name_muni}`
+                        : ""}
+                    .
+                  </p>
                 </div>
-                <div className="w-full md:max-w-[220px]">
+                <div className="w-full shrink-0 lg:max-w-[260px]">
+                  <label className="mb-1 block text-[10px] uppercase tracking-wide text-slate-500">
+                    Cultura (CONAB)
+                  </label>
                   <select
-                    value={selectedCulture}
+                    aria-label="Cultura de referência CONAB"
+                    value={
+                      culturasOpcoes.some((o) => o.cultura === selectedCulture)
+                        ? selectedCulture
+                        : ""
+                    }
                     onChange={(e) => setSelectedCulture(e.target.value)}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                    disabled={!codeMuni}
+                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {culturasEstado.length === 0 && <option value="">Sem cultura cadastrada</option>}
-                    {culturasEstado.map((cultura) => (
-                      <option key={cultura} value={cultura}>
-                        {cultura}
+                    {!codeMuni && (
+                      <option value="">Selecione um município no mapa…</option>
+                    )}
+                    {codeMuni &&
+                      loading &&
+                      culturasOpcoes.length === 0 && (
+                        <option value="">Carregando culturas CONAB…</option>
+                      )}
+                    {codeMuni &&
+                      !loading &&
+                      culturasOpcoes.length === 0 && (
+                        <option value="">
+                          Nenhuma linha CONAB para o IBGE {codeMuni}
+                        </option>
+                      )}
+                    {culturasOpcoes.map(({ cultura, label }, idx) => (
+                      <option
+                        key={`${codeMuni}-${idx}-${cultura}`}
+                        value={cultura}
+                      >
+                        {label}
                       </option>
                     ))}
                   </select>
@@ -1547,39 +1771,139 @@ export default function AgroClimaPanel({
               </div>
 
               <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900/45 p-3">
-                <div className="mb-2 flex items-center justify-between">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                   <div className="text-xs uppercase tracking-wide text-slate-400">
                     Calendário fenológico
                   </div>
-                  <div className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${fenologiaTone.badge}`}>
-                    {fenologiaPayload?.risco ? `Risco ${fenologiaPayload.risco}` : "Sem fase ativa"}
+                  <div
+                    className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${FENOLOGIA_PANEL_TONE.badge}`}
+                  >
+                    {fenologiaPayload?.ano_clima_referencia != null
+                      ? `Série clima: ${fenologiaPayload.ano_clima_referencia}`
+                      : "Clima vs média local"}
+                  </div>
+                </div>
+
+                <div className="mb-3 rounded-xl border border-slate-800/90 bg-slate-950/55 p-3">
+                  <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                    Legenda — cada mês com estágio CONAB
+                  </div>
+                  <div className="mt-2 grid gap-3 text-[11px] text-slate-200 sm:grid-cols-2">
+                    <div>
+                      <div className="text-[10px] text-slate-500">Barra superior · temperatura média no mês</div>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="h-2 w-7 rounded-sm bg-sky-500" />
+                          abaixo da média
+                        </span>
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="h-2 w-7 rounded-sm bg-slate-500" />
+                          próximo
+                        </span>
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="h-2 w-7 rounded-sm bg-orange-500" />
+                          acima da média
+                        </span>
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-slate-500">Barra inferior · precipitação no mês</div>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="h-2 w-7 rounded-sm bg-amber-700" />
+                          abaixo da média
+                        </span>
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="h-2 w-7 rounded-sm bg-slate-500" />
+                          próximo
+                        </span>
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="h-2 w-7 rounded-sm bg-cyan-500" />
+                          acima da média
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-[10px] leading-relaxed text-slate-500">
+                    Comparativo do último ano com dados completos em cada mês civil frente à climatologia
+                    (média de todos os anos da série neste município). Mínimo de 2 anos de histórico por mês.
+                  </p>
+                </div>
+
+                <div className="mb-3 rounded-xl border border-emerald-900/40 bg-emerald-950/20 p-3">
+                  <div className="text-[10px] font-medium uppercase tracking-wide text-emerald-600/90">
+                    Legenda — códigos fenológicos CONAB
+                  </div>
+                  <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
+                    Em cada mês ativo, o rótulo abrevia o estágio (ex.:{" "}
+                    <span className="font-mono text-slate-400">S/E/DV</span>). Barras combinadas indicam mais
+                    de um estágio no período.
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1.5 text-[10px] text-slate-300">
+                    {CONAB_FASE_LEGENDA.map(({ sigla, nome }) => (
+                      <span key={sigla} className="inline-flex items-baseline gap-1">
+                        <span className="font-mono font-semibold text-emerald-400/90">{sigla}</span>
+                        <span className="text-slate-500">{nome}</span>
+                      </span>
+                    ))}
                   </div>
                 </div>
 
                 <div className="grid grid-cols-12 gap-1.5">
-                  {fenologiaHeatmap.map((cell) => (
-                    <div key={cell.month} className="space-y-1">
-                      <div className="text-center text-[10px] font-medium uppercase tracking-wide text-slate-500">
-                        {cell.monthLabel}
+                  {fenologiaHeatmap.map((cell) => {
+                    const tip = [
+                      cell.isActive
+                        ? `${cell.monthLabel}: ${cell.fullLabel}`
+                        : `${cell.monthLabel}: sem estágio CONAB`,
+                      cell.climaTooltip,
+                    ]
+                      .filter(Boolean)
+                      .join(" — ");
+                    return (
+                      <div key={cell.month} className="space-y-1">
+                        <div className="text-center text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                          {cell.monthLabel}
+                        </div>
+                        <div
+                          title={tip}
+                          className={[
+                            "flex h-[4.25rem] flex-col overflow-hidden rounded-xl border text-[10px] font-semibold transition-all",
+                            cell.isActive
+                              ? "border-emerald-900/50 bg-slate-950/85 text-slate-100 shadow-inner shadow-black/20"
+                              : "border-slate-800 bg-slate-900/40 text-slate-600",
+                            cell.isCurrent ? "ring-2 ring-emerald-400/75 ring-offset-1 ring-offset-slate-950" : "",
+                          ].join(" ")}
+                        >
+                          <div className="flex min-h-0 flex-1 items-center justify-center px-0.5 text-center leading-tight">
+                            {cell.shortLabel}
+                          </div>
+                          {cell.isActive && cell.climaDisponivel ? (
+                            <div className="mt-auto flex w-full flex-col gap-px border-t border-slate-800/90 bg-black/25 pt-px">
+                              <div
+                                className={`h-1.5 w-full ${climaTempBarClass(cell.tempVs)}`}
+                                title={`Temperatura vs média: ${cell.tempVs ?? "—"}`}
+                              />
+                              <div
+                                className={`h-1.5 w-full ${climaPrecipBarClass(cell.precipVs)}`}
+                                title={`Precipitação vs média: ${cell.precipVs ?? "—"}`}
+                              />
+                            </div>
+                          ) : null}
+                          {cell.isActive && !cell.climaDisponivel ? (
+                            <div className="border-t border-slate-800/80 py-0.5 text-center text-[8px] font-normal text-slate-500">
+                              sem série
+                            </div>
+                          ) : null}
+                        </div>
                       </div>
-                      <div
-                        title={cell.isActive ? `${cell.monthLabel}: ${cell.fullLabel}` : `${cell.monthLabel}: fora da janela ativa`}
-                        className={[
-                          "flex h-16 items-center justify-center rounded-xl border text-[11px] font-semibold transition-all",
-                          cell.isActive
-                            ? `${heatmapTone.active} ${cell.isCurrent ? heatmapTone.current : ""}`
-                            : "border-slate-800 bg-slate-900/40 text-slate-600",
-                        ].join(" ")}
-                      >
-                        {cell.shortLabel}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-slate-400">
                   <span className="rounded-full border border-slate-700 bg-slate-900/60 px-2.5 py-1">
-                    Janela ativa: {fenologiaPayload?.janela_fase?.mes_inicio ?? "—"} → {fenologiaPayload?.janela_fase?.mes_fim ?? "—"}
+                    Meses com estágio CONAB: {fenologiaPayload?.janela_fase?.mes_inicio ?? "—"} →{" "}
+                    {fenologiaPayload?.janela_fase?.mes_fim ?? "—"}
                   </span>
                   <span className="rounded-full border border-slate-700 bg-slate-900/60 px-2.5 py-1">
                     Mês de referência: {fenologiaPayload?.mes_referencia ?? "—"}
@@ -1587,6 +1911,19 @@ export default function AgroClimaPanel({
                   <span className="rounded-full border border-slate-700 bg-slate-900/60 px-2.5 py-1">
                     Fase: {formatPhaseLabel(fenologiaPayload?.fase_atual)}
                   </span>
+                  {fenologiaPayload?.codigo_conab_mes ? (
+                    <span className="rounded-full border border-slate-700 bg-slate-900/60 px-2.5 py-1">
+                      Código mês: {fenologiaPayload.codigo_conab_mes}
+                    </span>
+                  ) : null}
+                  {fenologiaPayload?.mesorregiao_referencia ? (
+                    <span
+                      className="max-w-full rounded-full border border-slate-700 bg-slate-900/60 px-2.5 py-1"
+                      title={fenologiaPayload.mesorregiao_referencia}
+                    >
+                      Mesorregião: {fenologiaPayload.mesorregiao_referencia}
+                    </span>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -1597,8 +1934,8 @@ export default function AgroClimaPanel({
               </div>
 
               {fenologiaPayload ? (
-                <div className={`mt-2 rounded-2xl border ${fenologiaTone.border} bg-slate-950/45 p-4`}>
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <div className={`mt-2 rounded-2xl border ${FENOLOGIA_PANEL_TONE.border} bg-slate-950/45 p-4`}>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
                       <div className="text-xs text-slate-400">Cultura</div>
                       <div className="mt-1 text-sm font-semibold text-white">
@@ -1607,81 +1944,54 @@ export default function AgroClimaPanel({
                     </div>
 
                     <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-                      <div className="text-xs text-slate-400">Fase atual</div>
+                      <div className="text-xs text-slate-400">Fase (mês de referência)</div>
                       <div className="mt-1 text-sm font-semibold text-white">
                         {formatPhaseLabel(fenologiaPayload.fase_atual)}
                       </div>
                     </div>
 
                     <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-                      <div className="text-xs text-slate-400">Risco fenológico</div>
-                      <div className="mt-1">
-                        <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${fenologiaTone.badge}`}>
-                          {fenologiaPayload.risco ?? "—"}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-                      <div className="text-xs text-slate-400">Score fenológico</div>
+                      <div className="text-xs text-slate-400">Código CONAB (mês ref.)</div>
                       <div className="mt-1 text-sm font-semibold text-white">
-                        {fenologiaPayload.score != null ? formatNumber(fenologiaPayload.score, 2) : "—"}
+                        {fenologiaPayload.codigo_conab_mes ?? "—"}
                       </div>
                     </div>
                   </div>
 
-                  <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-12">
-                    <div className="xl:col-span-7 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-                      <div className="text-xs uppercase tracking-wide text-slate-400">
-                        Drivers fenológicos
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {(fenologiaPayload.drivers || []).length > 0 ? (
-                          (fenologiaPayload.drivers || []).map((driver) => (
-                            <span
-                              key={driver}
-                              className="rounded-full border border-slate-700 bg-slate-800/75 px-3 py-1.5 text-xs text-slate-200"
-                            >
-                              {driver}
-                            </span>
-                          ))
-                        ) : (
-                          <div className="rounded-lg border border-slate-800 bg-slate-800/55 px-3 py-2 text-sm text-slate-400">
-                            Sem drivers fenológicos suficientes para a leitura atual.
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                  {fenologiaPayload.clima_metodologia ? (
+                    <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
+                      {fenologiaPayload.clima_metodologia}
+                    </p>
+                  ) : null}
 
-                    <div className="xl:col-span-5 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-                      <div className="text-xs uppercase tracking-wide text-slate-400">
-                        Pesos e métricas recentes
+                  <div className="mt-3 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+                    <div className="text-xs uppercase tracking-wide text-slate-400">
+                      Métricas recentes (município)
+                    </div>
+                    <div className="mt-2 space-y-2 text-sm text-slate-200">
+                      <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-800/55 px-3 py-2">
+                        <span>Anomalia precip. (30d vs média)</span>
+                        <span>
+                          {formatNumber(
+                            latestMetrics?.precip_anomalia_pct_30d ?? latestMetrics?.precip_anomalia_30d,
+                            1
+                          )}
+                          %
+                        </span>
                       </div>
-                      <div className="mt-2 space-y-2 text-sm text-slate-200">
-                        <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-800/55 px-3 py-2">
-                          <span>Peso hídrico</span>
-                          <span>{formatNumber(fenologiaPayload.pesos?.hidrico, 2)}</span>
-                        </div>
-                        <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-800/55 px-3 py-2">
-                          <span>Peso térmico</span>
-                          <span>{formatNumber(fenologiaPayload.pesos?.termico, 2)}</span>
-                        </div>
-                        <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-800/55 px-3 py-2">
-                          <span>Peso IIS</span>
-                          <span>{formatNumber(fenologiaPayload.pesos?.iis, 2)}</span>
-                        </div>
-                        <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-800/55 px-3 py-2">
-                          <span>Anomalia de precipitação (30d)</span>
-                          <span>{formatNumber(latestMetrics?.precip_anomalia_pct_30d ?? latestMetrics?.precip_anomalia_30d, 2)}%</span>
-                        </div>
-                        <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-800/55 px-3 py-2">
-                          <span>Anomalia de temperatura (30d)</span>
-                          <span>{formatNumber(latestMetrics?.temp_anomalia_same_month ?? latestMetrics?.temp_anomalia_30d, 2)}°C</span>
-                        </div>
-                        <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-800/55 px-3 py-2">
-                          <span>IIS usado</span>
-                          <span>{formatNumber(latestMetrics?.iis_valor ?? selectedIisValue, 0)}</span>
-                        </div>
+                      <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-800/55 px-3 py-2">
+                        <span>Anomalia temp. (dia vs média do mês)</span>
+                        <span>
+                          {formatNumber(
+                            latestMetrics?.temp_anomalia_same_month ?? latestMetrics?.temp_anomalia_30d,
+                            2
+                          )}
+                          °C
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-800/55 px-3 py-2">
+                        <span>IIS usado</span>
+                        <span>{formatNumber(latestMetrics?.iis_valor ?? selectedIisValue, 0)}</span>
                       </div>
                     </div>
                   </div>
@@ -1727,14 +2037,15 @@ export default function AgroClimaPanel({
                 />
                 <Tooltip
                   {...chartTooltipStyle()}
-                  formatter={(value: number | string, name: string) => {
+                  formatter={(value, name) => {
+                    const label = String(name);
                     const mapNames: Record<string, string> = {
                       histAvg: "Média histórica",
                       current: `Ano ${iisGeoCurrentYear ?? "atual"}`,
                       bandRange: "Faixa histórica",
                     };
-                    if (name === "bandRange") return [value, mapNames[name]];
-                    return [formatNumber(Number(value), 2), mapNames[name] ?? name];
+                    if (label === "bandRange") return [value ?? "—", mapNames[label]];
+                    return [formatNumber(Number(value), 2), mapNames[label] ?? label];
                   }}
                 />
                 <Legend />
@@ -1805,7 +2116,7 @@ export default function AgroClimaPanel({
                   />
                   <Tooltip
                     {...chartTooltipStyle()}
-                    formatter={(v: number | string) => formatNumber(Number(v), 0)}
+                    formatter={(v) => formatNumber(Number(v), 0)}
                   />
                   <Bar dataKey="value" radius={[8, 8, 0, 0]} isAnimationActive={false}>
                     {iisBars.map((entry, index) => (
@@ -1849,7 +2160,7 @@ export default function AgroClimaPanel({
             />
             <Tooltip
               {...chartTooltipStyle()}
-              formatter={(v: number | string) => formatNumber(Number(v), 0)}
+              formatter={(v) => formatNumber(Number(v), 0)}
             />
             <Legend />
             {iisRecentWide.years.map((year, idx) => (
@@ -1895,14 +2206,15 @@ export default function AgroClimaPanel({
                   />
                   <Tooltip
                     {...chartTooltipStyle()}
-                    formatter={(value: number | string, name: string) => {
+                    formatter={(value, name) => {
+                      const label = String(name);
                       const labels: Record<string, string> = {
                         histAvg: "Média histórica",
                         current: `Ano ${tempMeanEnvelope.currentYear ?? "atual"}`,
                         bandRange: "Faixa histórica",
                       };
-                      if (name === "bandRange") return [value, labels[name]];
-                      return [`${formatNumber(Number(value), 2)} °C`, labels[name] ?? String(name)];
+                      if (label === "bandRange") return [value ?? "—", labels[label]];
+                      return [`${formatNumber(Number(value), 2)} °C`, labels[label] ?? label];
                     }}
                   />
                   <Legend />
@@ -1964,14 +2276,15 @@ export default function AgroClimaPanel({
                   />
                   <Tooltip
                     {...chartTooltipStyle()}
-                    formatter={(value: number | string, name: string) => {
+                    formatter={(value, name) => {
+                      const label = String(name);
                       const labels: Record<string, string> = {
                         histAvg: "Média histórica",
                         current: `Ano ${tempMinEnvelope.currentYear ?? "atual"}`,
                         bandRange: "Faixa histórica",
                       };
-                      if (name === "bandRange") return [value, labels[name]];
-                      return [`${formatNumber(Number(value), 2)} °C`, labels[name] ?? String(name)];
+                      if (label === "bandRange") return [value ?? "—", labels[label]];
+                      return [`${formatNumber(Number(value), 2)} °C`, labels[label] ?? label];
                     }}
                   />
                   <Legend />
@@ -2033,14 +2346,15 @@ export default function AgroClimaPanel({
                   />
                   <Tooltip
                     {...chartTooltipStyle()}
-                    formatter={(value: number | string, name: string) => {
+                    formatter={(value, name) => {
+                      const label = String(name);
                       const labels: Record<string, string> = {
                         histAvg: "Média histórica",
                         current: `Ano ${tempMaxEnvelope.currentYear ?? "atual"}`,
                         bandRange: "Faixa histórica",
                       };
-                      if (name === "bandRange") return [value, labels[name]];
-                      return [`${formatNumber(Number(value), 2)} °C`, labels[name] ?? String(name)];
+                      if (label === "bandRange") return [value ?? "—", labels[label]];
+                      return [`${formatNumber(Number(value), 2)} °C`, labels[label] ?? label];
                     }}
                   />
                   <Legend />
@@ -2101,7 +2415,7 @@ export default function AgroClimaPanel({
                   />
                   <Tooltip
                     {...chartTooltipStyle()}
-                    formatter={(v: number | string) => `${formatNumber(Number(v), 2)} mm`}
+                    formatter={(v) => `${formatNumber(Number(v), 2)} mm`}
                   />
                   <Legend />
                   {precipWide.years.map((year, idx) => (
@@ -2133,14 +2447,15 @@ export default function AgroClimaPanel({
                 />
                 <Tooltip
                   {...chartTooltipStyle()}
-                  formatter={(value: number | string, name: string) => {
+                  formatter={(value, name) => {
+                    const label = String(name);
                     const labels: Record<string, string> = {
                       mean: "Média acumulada",
                       current: `Ano ${precipAccumComparison.currentYear ?? "atual"}`,
                       posGap: "Acima da média",
                       negGap: "Abaixo da média",
                     };
-                    return [`${formatNumber(Number(value), 2)} mm`, labels[name] ?? String(name)];
+                    return [`${formatNumber(Number(value), 2)} mm`, labels[label] ?? label];
                   }}
                 />
                 <Legend />
