@@ -291,13 +291,13 @@ function formatSerieLabel(serie?: string | null): string {
 function chartTooltipStyle() {
   return {
     contentStyle: {
-      backgroundColor: "#0f172a",
-      border: "1px solid #334155",
-      color: "#f8fafc",
+      backgroundColor: "#ffffff",
+      border: "1px solid #d6d3d1",
+      color: "#1c1917",
       borderRadius: "14px",
-      boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
+      boxShadow: "0 10px 30px rgba(0,0,0,0.1)",
     },
-    labelStyle: { color: "#f8fafc" },
+    labelStyle: { color: "#1c1917", fontWeight: "bold" },
   };
 }
 
@@ -317,28 +317,28 @@ function safraSortKey(safra: string): number {
 function getBucketBadgeClass(bucket?: string | null): string {
   switch ((bucket || "").toLowerCase()) {
     case "emergente":
-      return "border-emerald-800 bg-emerald-950/60 text-emerald-300";
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
     case "expansao_relevante":
-      return "border-sky-800 bg-sky-950/60 text-sky-300";
+      return "border-sky-200 bg-sky-50 text-sky-700";
     case "pressao":
-      return "border-rose-800 bg-rose-950/60 text-rose-300";
+      return "border-rose-200 bg-rose-50 text-rose-700";
     default:
-      return "border-slate-700 bg-slate-800/80 text-slate-300";
+      return "border-brand-stone-300 bg-brand-bg/50 text-brand-stone-600";
   }
 }
 
 function getFaixaBadgeClass(faixa?: string | null): string {
   switch ((faixa || "").toLowerCase()) {
     case "muito_alta":
-      return "border-emerald-700 bg-emerald-950/70 text-emerald-300";
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
     case "alta":
-      return "border-lime-700 bg-lime-950/70 text-lime-300";
+      return "border-lime-200 bg-lime-50 text-lime-700";
     case "moderada":
-      return "border-amber-700 bg-amber-950/70 text-amber-300";
+      return "border-amber-200 bg-amber-50 text-amber-700";
     case "neutra":
-      return "border-slate-700 bg-slate-800/80 text-slate-300";
+      return "border-brand-stone-300 bg-brand-bg/50 text-brand-stone-600";
     default:
-      return "border-rose-700 bg-rose-950/70 text-rose-300";
+      return "border-rose-200 bg-rose-50 text-rose-700";
   }
 }
 
@@ -348,7 +348,8 @@ function getIoaBarClass(ioa?: number | null): string {
   if (value >= 80) return "bg-emerald-400";
   if (value >= 65) return "bg-lime-400";
   if (value >= 50) return "bg-amber-400";
-  if (value >= 35) return "bg-slate-400";
+  if (value >= 35) return "bg-brand-stone-400";
+  if (value >= 20) return "bg-brand-stone-200";
   return "bg-rose-400";
 }
 
@@ -358,26 +359,26 @@ function getIoaWidth(ioa?: number | null): string {
 }
 
 function getRankBadge(index: number): string {
-  if (index === 0) return "bg-amber-500/20 text-amber-300 border-amber-700";
-  if (index === 1) return "bg-slate-400/20 text-slate-200 border-slate-600";
-  if (index === 2) return "bg-orange-500/20 text-orange-300 border-orange-700";
-  return "bg-slate-800 text-slate-300 border-slate-700";
+  if (index === 0) return "bg-amber-100 text-amber-700 border-amber-200";
+  if (index === 1) return "bg-brand-stone-100 text-brand-stone-600 border-brand-stone-200";
+  if (index === 2) return "bg-orange-100 text-orange-700 border-orange-200";
+  return "bg-brand-bg text-brand-stone-600 border-brand-stone-300";
 }
 
 function getSummaryIconClass(kind: "opportunity" | "pressure" | "news"): string {
-  if (kind === "opportunity") return "border-emerald-800 bg-emerald-950/60 text-emerald-300";
-  if (kind === "pressure") return "border-rose-800 bg-rose-950/60 text-rose-300";
-  return "border-sky-800 bg-sky-950/60 text-sky-300";
+  if (kind === "opportunity") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (kind === "pressure") return "border-rose-200 bg-rose-50 text-rose-700";
+  return "border-sky-200 bg-sky-50 text-sky-700";
 }
 
 function getSentimentBadgeClass(label?: string | null): string {
   switch ((label || "").toLowerCase()) {
     case "positivo":
-      return "border-emerald-700 bg-emerald-950/70 text-emerald-300";
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
     case "negativo":
-      return "border-rose-700 bg-rose-950/70 text-rose-300";
+      return "border-rose-200 bg-rose-50 text-rose-700";
     default:
-      return "border-amber-700 bg-amber-950/70 text-amber-300";
+      return "border-amber-200 bg-amber-50 text-amber-700";
   }
 }
 
@@ -389,6 +390,18 @@ function formatSentimentLabel(label?: string | null): string {
     neutro: "Neutro",
   };
   return map[label.toLowerCase()] || label;
+}
+
+function getBagWeight(crop?: string | null): number | null {
+  if (!crop) return null;
+  const c = crop.toLowerCase();
+  if (c.includes("soja") || c.includes("milho") || c.includes("trigo") || c.includes("cafe") || c.includes("feijao")) {
+    return 60;
+  }
+  if (c.includes("arroz")) {
+    return 50;
+  }
+  return null;
 }
 
 export default function AgroProductionPanel() {
@@ -753,815 +766,253 @@ export default function AgroProductionPanel() {
     loadingSafras ||
     loadingComparativo;
 
-  return (
-    <div className="space-y-6">
-      <div className="rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl backdrop-blur-sm">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-fuchsia-300/80">
-              Aba Produção Agrícola
-            </p>
-            <h2 className="mt-1 text-xl font-semibold text-slate-100">
-              Comparativo IBGE × CONAB
-            </h2>
-            <p className="mt-1 max-w-3xl text-sm text-slate-400">
-              Selecione o estado, a cultura e a safra para comparar séries
-              agrícolas disponíveis por fonte.
-            </p>
-          </div>
+  const summaryMetrics = useMemo(() => {
+    if (!comparativo?.rows?.length) return null;
+    const conab = comparativo.rows.find(r => r.fonte.toUpperCase() === 'CONAB');
+    const ibge = comparativo.rows.find(r => r.fonte.toUpperCase() === 'IBGE');
+    
+    const producao = conab?.producao || ibge?.producao || 0;
+    const area = conab?.area_plantada || ibge?.area_plantada || 0;
+    const produtividade = conab?.produtividade || ibge?.produtividade || 0;
+    const bagWeight = getBagWeight(selectedCultura);
+    
+    return {
+      producao,
+      area,
+      produtividade,
+      produtividadeSacas: bagWeight ? produtividade / bagWeight : null,
+      bagWeight,
+      fonte: conab ? 'CONAB' : (ibge ? 'IBGE' : '-')
+    };
+  }, [comparativo, selectedCultura]);
 
-          <div className="grid w-full gap-3 md:grid-cols-3 xl:max-w-4xl">
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-slate-300">
-                Estado
-              </label>
+  return (
+    <div className="space-y-0">
+      {/* Selectors & Summary Section */}
+      <div className="grid grid-cols-1 md:grid-cols-12 border-b border-brand-stone-300">
+        <div className="col-span-1 md:col-span-4 p-8 border-r border-brand-stone-300 bg-brand-bg/50">
+          <div className="space-y-6">
+            <div>
+              <label className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-brand-stone-600">Estado</label>
               <select
                 value={selectedUf}
                 onChange={(e) => setSelectedUf(e.target.value)}
-                className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-slate-100 outline-none transition focus:border-fuchsia-500"
+                className="w-full rounded-lg border border-brand-stone-300 bg-white px-4 py-2.5 text-sm text-brand-dark shadow-sm outline-none focus:border-brand-blue"
               >
                 <option value="">Selecione</option>
                 {ufs.map((item) => (
-                  <option key={item.uf} value={item.uf}>
-                    {formatUfLabel(item)}
-                  </option>
+                  <option key={item.uf} value={item.uf}>{formatUfLabel(item)}</option>
                 ))}
               </select>
             </div>
-
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-slate-300">
-                Cultura
-              </label>
+            <div>
+              <label className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-brand-stone-600">Cultura</label>
               <select
                 value={selectedCultura}
                 onChange={(e) => setSelectedCultura(e.target.value)}
                 disabled={!selectedUf || culturas.length === 0}
-                className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-slate-100 outline-none transition focus:border-fuchsia-500 disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full rounded-lg border border-brand-stone-300 bg-white px-4 py-2.5 text-sm text-brand-dark shadow-sm outline-none focus:border-brand-blue disabled:opacity-50"
               >
-                <option value="">
-                  {loadingCulturas
-                    ? "Carregando..."
-                    : culturas.length === 0
-                    ? "Sem culturas disponíveis"
-                    : "Selecione"}
-                </option>
+                <option value="">{loadingCulturas ? "Carregando..." : "Selecione"}</option>
                 {culturas.map((item) => (
-                  <option key={item.cultura} value={item.cultura}>
-                    {item.label || formatCropLabel(item.cultura)}
-                  </option>
+                  <option key={item.cultura} value={item.cultura}>{item.label || formatCropLabel(item.cultura)}</option>
                 ))}
               </select>
             </div>
-
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-slate-300">
-                Safra
-              </label>
+            <div>
+              <label className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-brand-stone-600">Safra</label>
               <select
                 value={selectedSafra}
                 onChange={(e) => setSelectedSafra(e.target.value)}
                 disabled={!selectedCultura || safras.length === 0}
-                className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-slate-100 outline-none transition focus:border-fuchsia-500 disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full rounded-lg border border-brand-stone-300 bg-white px-4 py-2.5 text-sm text-brand-dark shadow-sm outline-none focus:border-brand-blue disabled:opacity-50"
               >
-                <option value="">
-                  {loadingSafras
-                    ? "Carregando..."
-                    : safras.length === 0
-                    ? "Sem safras disponíveis"
-                    : "Selecione"}
-                </option>
+                <option value="">{loadingSafras ? "Carregando..." : "Selecione"}</option>
                 {safras.map((item) => (
-                  <option key={item.safra} value={item.safra}>
-                    {item.label || item.safra}
-                  </option>
+                  <option key={item.safra} value={item.safra}>{item.label || item.safra}</option>
                 ))}
               </select>
             </div>
+          </div>
+        </div>
+
+        <div className="col-span-1 md:col-span-8 grid grid-cols-1 sm:grid-cols-3">
+          <div className="p-8 border-r border-brand-stone-300 flex flex-col justify-center group hover:bg-white transition-colors">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-brand-stone-600 block mb-2">Produção Total</span>
+            <span className="text-3xl font-bold tracking-tighter text-brand-dark">
+              {summaryMetrics ? `${formatInteger(summaryMetrics.producao)} t` : "—"}
+            </span>
+            <span className="text-[9px] text-brand-stone-400 block mt-2">Fonte: {summaryMetrics?.fonte || "—"}</span>
+          </div>
+          <div className="p-8 border-r border-brand-stone-300 flex flex-col justify-center group hover:bg-white transition-colors">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-brand-stone-600 block mb-2">Área Plantada</span>
+            <span className="text-3xl font-bold tracking-tighter text-brand-dark">
+              {summaryMetrics ? `${formatInteger(summaryMetrics.area)} ha` : "—"}
+            </span>
+            <span className="text-[9px] text-brand-stone-400 block mt-2">Extensão territorial</span>
+          </div>
+          <div className="p-8 flex flex-col justify-center group hover:bg-white transition-colors">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-brand-stone-600 block mb-2">Produtividade</span>
+            <div className="flex flex-col">
+              <span className="text-3xl font-bold tracking-tighter text-brand-blue">
+                {summaryMetrics ? `${formatInteger(summaryMetrics.produtividade)} kg/ha` : "—"}
+              </span>
+              {summaryMetrics?.produtividadeSacas && (
+                <span className="text-sm font-bold text-emerald-600 mt-1">
+                  {formatNumber(summaryMetrics.produtividadeSacas, 1)} sc/ha <span className="text-[10px] font-normal text-brand-stone-400">(saca {summaryMetrics.bagWeight}kg)</span>
+                </span>
+              )}
+            </div>
+            <span className="text-[9px] text-brand-stone-400 block mt-2">Rendimento médio</span>
           </div>
         </div>
       </div>
 
       {errorMsg && (
-        <div className="rounded-2xl border border-red-900 bg-red-950/40 p-4 text-sm text-red-300">
+        <div className="mx-8 mt-8 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           {errorMsg}
         </div>
       )}
 
-      {isBusy && (
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-4 text-sm text-slate-300 shadow-sm backdrop-blur">
-          Carregando comparativo de produção agrícola...
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
-        <div className="space-y-6 xl:col-span-8">
-          <div className="rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl backdrop-blur-sm">
-            <div className="mb-4">
-              <h2 className="text-xl font-semibold text-slate-100">
-                Tabela Comparativa
-              </h2>
-              <p className="text-sm text-slate-400">
-                Séries disponíveis por fonte para a safra selecionada.
-              </p>
+      {/* Main Analysis Section */}
+      <div className="grid grid-cols-1 md:grid-cols-12 border-b border-brand-stone-300">
+        <div className="col-span-1 md:col-span-8 border-r border-brand-stone-300 p-8">
+          <div className="mb-8 flex items-end justify-between">
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-brand-stone-600 mb-1 block">Evolução Histórica</span>
+              <h3 className="text-2xl font-bold tracking-tighter text-brand-dark">{metricLabel} por Safra</h3>
             </div>
-
-            <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-              <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-400">
-                  Estado
-                </p>
-                <p className="mt-1 text-sm font-semibold text-slate-100">
-                  {formatUfLabel(selectedUfItem)}
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-400">
-                  Cultura
-                </p>
-                <p className="mt-1 text-sm font-semibold text-slate-100">
-                  {header?.cultura
-                    ? formatCropLabel(header.cultura)
-                    : formatCropLabel(selectedCultura)}
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-400">
-                  Safra
-                </p>
-                <p className="mt-1 text-sm font-semibold text-slate-100">
-                  {header?.safra || selectedSafra || "-"}
-                </p>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-700 text-left text-slate-400">
-                    <th className="py-2 pr-4">Fonte</th>
-                    <th className="py-2 pr-4">Série</th>
-                    <th className="py-2 pr-4">Área Plantada</th>
-                    <th className="py-2 pr-4">Produção</th>
-                    <th className="py-2 pr-4">Produtividade</th>
-                    <th className="py-2 pr-4">Projeção</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {comparativo?.rows?.length ? (
-                    comparativo.rows.map((row, idx) => (
-                      <tr
-                        key={`${row.fonte}-${row.serie}-${idx}`}
-                        className="border-b border-slate-800 last:border-0"
-                      >
-                        <td className="py-3 pr-4 font-medium text-slate-100">
-                          {row.fonte}
-                        </td>
-                        <td className="py-3 pr-4 text-slate-300">
-                          {row.cultura_label || formatSerieLabel(row.serie)}
-                        </td>
-                        <td className="py-3 pr-4 text-slate-300">
-                          {formatInteger(row.area_plantada)}
-                        </td>
-                        <td className="py-3 pr-4 text-slate-300">
-                          {formatInteger(row.producao)}
-                        </td>
-                        <td className="py-3 pr-4 text-slate-300">
-                          {formatNumber(row.produtividade)}
-                        </td>
-                        <td className="py-3 pr-4 text-slate-300">
-                          {formatInteger(row.projecao)}
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td
-                        colSpan={6}
-                        className="py-4 text-center text-sm text-slate-400"
-                      >
-                        Nenhum dado disponível para a seleção atual.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className="rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl backdrop-blur-sm">
-            <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-slate-100">
-                  Histórico da cultura
-                </h3>
-                <p className="text-sm text-slate-400">
-                  Série agregada por fonte para a cultura selecionada.
-                </p>
-              </div>
-
-              <div className="flex w-full max-w-xs flex-col gap-2">
-                <label className="text-sm font-medium text-slate-300">
-                  Métrica do gráfico
-                </label>
-                <select
-                  value={chartMetric}
-                  onChange={(e) => setChartMetric(e.target.value as ChartMetric)}
-                  className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-slate-100 outline-none transition focus:border-fuchsia-500"
+            <div className="flex gap-2">
+              {(["producao", "area_plantada", "produtividade"] as ChartMetric[]).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setChartMetric(m)}
+                  className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border transition-all ${chartMetric === m ? 'bg-brand-blue text-white border-brand-blue' : 'bg-white text-brand-stone-600 border-brand-stone-300 hover:border-brand-blue'}`}
                 >
-                  <option value="producao">Produção</option>
-                  <option value="area_plantada">Área Plantada</option>
-                  <option value="produtividade">Produtividade</option>
-                </select>
-              </div>
+                  {m.replace("_", " ")}
+                </button>
+              ))}
             </div>
-
-            {loadingHistorico ? (
-              <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4 text-sm text-slate-300">
-                Carregando histórico...
-              </div>
-            ) : chartData.length === 0 ? (
-              <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4 text-sm text-slate-300">
-                Sem histórico disponível para o gráfico.
-              </div>
-            ) : (
-              <div className="h-[340px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                    <XAxis
-                      dataKey="safra"
-                      tick={{ fontSize: 11, fill: "#cbd5e1" }}
-                    />
-                    <YAxis
-                      tick={{ fontSize: 11, fill: "#cbd5e1" }}
-                      tickFormatter={(value) =>
-                        chartMetric === "produtividade"
-                          ? formatNumber(Number(value), 2)
-                          : formatInteger(Number(value))
-                      }
-                    />
-                    <Tooltip
-                      {...chartTooltipStyle()}
-                      formatter={(value: number | string | undefined, name: string | undefined) => {
-                        const label =
-                          String(name).includes("IBGE")
-                            ? "IBGE"
-                            : String(name).includes("CONAB")
-                            ? "CONAB"
-                            : String(name);
-
-                        const formattedValue =
-                          chartMetric === "produtividade"
-                            ? formatNumber(
-                                typeof value === "number" ? value : Number(value),
-                                2
-                              )
-                            : formatInteger(
-                                typeof value === "number" ? value : Number(value)
-                              );
-
-                        return [formattedValue, label] as [string, string];
-                      }}
-                    />
-                    <Legend />
-                    <Line
-                      type="monotone"
-                      dataKey="ibge"
-                      name={`IBGE - ${metricLabel}`}
-                      stroke="#60a5fa"
-                      strokeWidth={2.5}
-                      dot
-                      connectNulls
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="conab"
-                      name={`CONAB - ${metricLabel}`}
-                      stroke="#f59e0b"
-                      strokeWidth={2.5}
-                      dot
-                      connectNulls
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            )}
           </div>
-
-          <div className="rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl backdrop-blur-sm">
-            <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-              <div>
-                <h2 className="text-xl font-semibold text-slate-100">
-                  Sentimento Editorial da Cultura
-                </h2>
-                <p className="text-sm text-slate-400">
-                  Leitura contextual de notícias para a cultura e estado selecionados.
-                </p>
-              </div>
-
-              {loadingAgroSentiment ? (
-                <span className="rounded-full border border-slate-700 bg-slate-900/60 px-3 py-1 text-xs text-slate-300">
-                  Atualizando...
-                </span>
-              ) : agroSentiment ? (
-                <div className="flex flex-wrap gap-2">
-                  <span
-                    className={`rounded-full border px-3 py-1 text-xs font-semibold ${getSentimentBadgeClass(
-                      agroSentiment.sentiment_label
-                    )}`}
-                  >
-                    {formatSentimentLabel(agroSentiment.sentiment_label)}
-                  </span>
-
-                  <span className="rounded-full border border-slate-700 bg-slate-800/80 px-3 py-1 text-xs font-semibold text-slate-200">
-                    Score: {formatNumber(agroSentiment.sentiment_score, 2)}
-                  </span>
-
-                  <span className="rounded-full border border-slate-700 bg-slate-800/80 px-3 py-1 text-xs font-semibold text-slate-200">
-                    Manchetes: {formatInteger(agroSentiment.headline_count)}
-                  </span>
-                </div>
-              ) : null}
-            </div>
-
-            {loadingAgroSentiment ? (
-              <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4 text-sm text-slate-300">
-                Carregando leitura editorial da cultura...
-              </div>
-            ) : !selectedUf || !selectedCultura ? (
-              <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4 text-sm text-slate-300">
-                Selecione um estado e uma cultura para visualizar o sentimento editorial.
-              </div>
-            ) : !agroSentiment ? (
-              <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4 text-sm text-slate-300">
-                Não foi possível carregar o sentimento editorial para a seleção atual.
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                  <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-3">
-                    <p className="text-xs uppercase tracking-wide text-slate-400">
-                      Estado
-                    </p>
-                    <p className="mt-1 text-sm font-semibold text-slate-100">
-                      {formatUfLabel(selectedUfItem)}
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-3">
-                    <p className="text-xs uppercase tracking-wide text-slate-400">
-                      Cultura
-                    </p>
-                    <p className="mt-1 text-sm font-semibold text-slate-100">
-                      {formatCropLabel(selectedCultura)}
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-3">
-                    <p className="text-xs uppercase tracking-wide text-slate-400">
-                      Escopo da leitura
-                    </p>
-                    <p className="mt-1 text-sm font-semibold text-slate-100">
-                      {agroSentiment.matched_scope === "uf"
-                        ? "Cultura + UF"
-                        : "Cultura (fallback)"}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4">
-                  <p className="mb-3 text-xs uppercase tracking-wide text-slate-400">
-                    Tópicos no radar
-                  </p>
-
-                  <div className="flex flex-wrap gap-2">
-                    {(agroSentiment.top_topics || []).length ? (
-                      agroSentiment.top_topics.map((topic) => (
-                        <span
-                          key={topic}
-                          className="rounded-full border border-slate-700 bg-slate-900/80 px-3 py-1 text-xs font-semibold text-slate-300"
-                        >
-                          {topic}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="text-sm text-slate-300">
-                        Sem tópicos identificados.
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4">
-                  <p className="text-xs uppercase tracking-wide text-slate-400">
-                    Resumo editorial
-                  </p>
-                  <p className="mt-2 text-sm leading-7 text-slate-300">
-                    {agroSentiment.editorial_summary || "Sem resumo disponível."}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <p className="text-xs uppercase tracking-wide text-slate-400">
-                      Manchetes recentes
-                    </p>
-
-                    {agroSentiment.updated_at && (
-                      <p className="text-xs text-slate-500">
-                        Atualizado: {agroSentiment.updated_at}
-                      </p>
-                    )}
-                  </div>
-
-                  {(agroSentiment.latest_headlines || []).length === 0 ? (
-                    <p className="text-sm text-slate-300">
-                      Sem manchetes recentes para exibir.
-                    </p>
-                  ) : (
-                    <div className="space-y-3">
-                      {agroSentiment.latest_headlines.slice(0, 5).map((headline, idx) => (
-                        <div
-                          key={`${idx}-${headline.title || "headline"}`}
-                          className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3"
-                        >
-                          <p className="text-sm leading-6 text-slate-200">
-                            {headline.title || "Sem título"}
-                          </p>
-
-                          {(headline.date || headline.source) && (
-                            <p className="mt-2 text-xs text-slate-500">
-                              {[headline.date, headline.source]
-                                .filter(Boolean)
-                                .join(" • ")}
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
+          <div className="h-[400px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                <XAxis dataKey="safra" tick={{ fontSize: 10, fill: "#78716c" }} axisLine={{ stroke: '#d6d3d1' }} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: "#78716c" }} axisLine={false} tickLine={false} tickFormatter={(v) => formatNumber(v, 0)} />
+                <Tooltip contentStyle={chartTooltipStyle().contentStyle} />
+                <Legend iconType="circle" verticalAlign="top" align="right" height={36}/>
+                <Line type="monotone" dataKey="ibge" name="IBGE" stroke="#0071B9" strokeWidth={3} dot={{ r: 4, fill: "#0071B9", strokeWidth: 2, stroke: "#fff" }} />
+                <Line type="monotone" dataKey="conab" name="CONAB" stroke="#F59E0B" strokeWidth={3} dot={{ r: 4, fill: "#F59E0B", strokeWidth: 2, stroke: "#fff" }} />
+              </LineChart>
+            </ResponsiveContainer>
           </div>
+        </div>
 
-          <div className="rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl backdrop-blur-sm">
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-xl font-semibold text-slate-100">
-                  Índice de Oportunidade Agrícola
-                </h2>
-                <p className="text-sm text-slate-400">
-                  Ranking sintético que combina força estatística, sinal editorial e perfil emergente.
-                </p>
+        <div className="col-span-1 md:col-span-4 bg-brand-bg/10 p-8">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-brand-stone-600 block mb-6">Radar de Oportunidades (IOA)</span>
+          <div className="space-y-4">
+            {radarIoaHighlights.map((item, idx) => (
+              <div key={idx} className="p-4 rounded-xl border border-brand-stone-300 bg-white shadow-sm group hover:shadow-md transition-all">
+                <div className="flex justify-between items-start mb-2">
+                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border ${getRankBadge(idx)}`}>#{idx + 1}</span>
+                  <span className="text-xl font-bold text-brand-dark">{formatNumber(item.ioa, 1)}</span>
+                </div>
+                <p className="font-bold text-brand-dark mb-1">{item.label || formatCropLabel(item.cultura)}</p>
+                <div className="h-1 w-full bg-brand-stone-100 rounded-full overflow-hidden">
+                  <div className={`h-full ${getIoaBarClass(item.ioa)}`} style={{ width: getIoaWidth(item.ioa) }} />
+                </div>
               </div>
-              {loadingRadar && (
-                <span className="rounded-full border border-slate-700 bg-slate-900/60 px-3 py-1 text-xs text-slate-300">
-                  Atualizando...
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom Details Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-12 border-b border-brand-stone-300">
+        <div className="col-span-1 md:col-span-4 p-8 border-r border-brand-stone-300">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-brand-stone-600 block mb-4">Comparativo IBGE × CONAB</span>
+          <div className="bg-white rounded-2xl border border-brand-stone-300 shadow-sm overflow-hidden">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="border-b border-brand-stone-300 text-left text-brand-stone-600 bg-brand-bg/50">
+                  <th className="py-3 px-4 font-bold uppercase tracking-wider text-[9px]">Fonte</th>
+                  <th className="py-3 px-4 font-bold uppercase tracking-wider text-[9px] text-right">Produção</th>
+                  <th className="py-3 px-4 font-bold uppercase tracking-wider text-[9px] text-right">Área</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-brand-stone-200">
+                {comparativo?.rows?.map((row, idx) => (
+                  <tr key={idx} className="hover:bg-brand-bg/30 transition-colors">
+                    <td className="py-3 px-4 font-medium text-brand-dark text-xs">{row.fonte}</td>
+                    <td className="py-3 px-4 text-right text-brand-stone-600 font-bold text-xs">{formatInteger(row.producao)} t</td>
+                    <td className="py-3 px-4 text-right text-brand-stone-600 text-xs">{formatInteger(row.area_plantada)} ha</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="mt-6">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-brand-stone-600 block mb-3">Watchlist</span>
+            <div className="flex flex-wrap gap-2">
+              {emergingRadar?.watchlist?.map((item, idx) => (
+                <span key={idx} className="px-2 py-1 rounded-md bg-white border border-brand-stone-300 text-[9px] font-medium text-brand-stone-600">
+                  {item.crop || item.crop_id}
                 </span>
-              )}
+              ))}
             </div>
+          </div>
+        </div>
 
-            {radarIoaHighlights.length === 0 ? (
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-sm text-slate-300">
-                Sem dados disponíveis no momento.
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                {radarIoaHighlights.map((item, idx) => (
-                  <div
-                    key={`ioa-${item.cultura}`}
-                    className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${getRankBadge(
-                              idx
-                            )}`}
-                          >
-                            #{idx + 1}
-                          </span>
-                          <p className="truncate text-base font-semibold text-slate-100">
-                            {item.label || formatCropLabel(item.cultura)}
-                          </p>
-                        </div>
-
-                        <p className="mt-1 text-xs text-slate-400">
-                          {item.categoria || "outras"} • {item.safra_atual || "-"}
-                        </p>
-                      </div>
-
-                      <div className="text-right">
-                        <div className="text-2xl font-bold text-slate-100">
-                          {formatNumber(item.ioa, 1)}
-                        </div>
-                        <span
-                          className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${getFaixaBadgeClass(
-                            item.faixa
-                          )}`}
-                        >
-                          {item.faixa?.replaceAll("_", " ") || "-"}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="mt-3">
-                      <div className="mb-1 flex items-center justify-between text-[11px] text-slate-400">
-                        <span>Intensidade do índice</span>
-                        <span>{formatNumber(item.ioa, 1)}/100</span>
-                      </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-slate-800">
-                        <div
-                          className={`h-full rounded-full transition-all ${getIoaBarClass(
-                            item.ioa
-                          )}`}
-                          style={{ width: getIoaWidth(item.ioa) }}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <span
-                        className={`inline-flex rounded-full border px-2 py-1 text-[11px] font-semibold ${getBucketBadgeClass(
-                          item.bucket
-                        )}`}
-                      >
-                        {item.bucket?.replaceAll("_", " ") || "-"}
-                      </span>
-
-                      {item.crescimento_producao_percent !== null &&
-                        item.crescimento_producao_percent !== undefined && (
-                          <span className="inline-flex rounded-full border border-slate-700 bg-slate-800 px-2 py-1 text-[11px] font-semibold text-slate-300">
-                            Δ produção {formatNumber(item.crescimento_producao_percent, 2)}%
-                          </span>
-                        )}
-                    </div>
-
-                    {item.interpretacao && (
-                      <p className="mt-3 text-sm leading-6 text-slate-300">
-                        {item.interpretacao}
-                      </p>
-                    )}
+        <div className="col-span-1 md:col-span-4 p-8 border-r border-brand-stone-300 bg-brand-bg/5">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-brand-stone-600 block mb-6">Emergentes & Pressões</span>
+          <div className="space-y-6">
+            <div>
+              <span className="text-[9px] font-bold uppercase text-brand-blue block mb-3">Culturas Emergentes</span>
+              <div className="space-y-2">
+                {radarStatEmergentes.map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-white border border-brand-stone-200 shadow-sm">
+                    <span className="text-xs font-bold text-brand-dark">{item.label || formatCropLabel(item.cultura)}</span>
+                    <span className="text-[10px] font-bold text-emerald-600">+{formatNumber(item.crescimento_producao_percent, 1)}%</span>
                   </div>
                 ))}
               </div>
-            )}
+            </div>
+            <div>
+              <span className="text-[9px] font-bold uppercase text-rose-600 block mb-3">Pressões Produtivas</span>
+              <div className="space-y-2">
+                {radarStatPressao.map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-white border border-brand-stone-200 shadow-sm">
+                    <span className="text-xs font-bold text-brand-dark">{item.label || formatCropLabel(item.cultura)}</span>
+                    <span className="text-[10px] font-bold text-rose-600">{formatNumber(item.crescimento_producao_percent, 1)}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="space-y-6 xl:col-span-4">
-          <div className="rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl backdrop-blur-sm">
-            <div className="mb-4">
-              <h2 className="text-xl font-semibold text-slate-100">
-                Radar Editorial
-              </h2>
-              <p className="text-sm text-slate-400">
-                Leitura de mercado, emergentes e pressões do agro.
-              </p>
-            </div>
-
-            <div className="mb-4 grid grid-cols-1 gap-3">
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
-                <div className="flex items-center gap-2">
-                  <span className={`inline-flex rounded-full border px-2 py-1 text-[11px] font-semibold ${getSummaryIconClass("opportunity")}`}>
-                    Oportunidade
-                  </span>
-                </div>
-                <p className="mt-2 text-sm font-semibold text-slate-100">
-                  {topOpportunity?.label || "Sem destaque"}
-                </p>
-                <p className="mt-1 text-xs text-slate-400">
-                  {topOpportunity
-                    ? `IOA ${formatNumber(topOpportunity.ioa, 1)} • ${topOpportunity.faixa?.replaceAll("_", " ")}`
-                    : "Sem leitura disponível"}
-                </p>
+        <div className="col-span-1 md:col-span-4 p-8">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-brand-stone-600 block mb-6">Sentimento & Manchetes</span>
+          {agroSentiment ? (
+            <div className="space-y-6">
+              <div className={`p-5 rounded-2xl border ${getSentimentBadgeClass(agroSentiment.sentiment_label)} bg-white shadow-sm`}>
+                <span className="text-[9px] font-bold uppercase text-brand-stone-600 block mb-1">Resumo Editorial</span>
+                <span className="text-lg font-bold block mb-2">{formatSentimentLabel(agroSentiment.sentiment_label)}</span>
+                <p className="text-xs leading-relaxed text-brand-stone-600">{agroSentiment.editorial_summary}</p>
               </div>
-
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
-                <div className="flex items-center gap-2">
-                  <span className={`inline-flex rounded-full border px-2 py-1 text-[11px] font-semibold ${getSummaryIconClass("pressure")}`}>
-                    Pressão
-                  </span>
-                </div>
-                <p className="mt-2 text-sm font-semibold text-slate-100">
-                  {topPressure?.label || "Sem destaque"}
-                </p>
-                <p className="mt-1 text-xs text-slate-400">
-                  {topPressure
-                    ? `Δ produção ${formatNumber(topPressure.crescimento_producao_percent, 2)}%`
-                    : "Sem leitura disponível"}
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
-                <div className="flex items-center gap-2">
-                  <span className={`inline-flex rounded-full border px-2 py-1 text-[11px] font-semibold ${getSummaryIconClass("news")}`}>
-                    Notícias
-                  </span>
-                </div>
-                <p className="mt-2 text-sm font-semibold text-slate-100">
-                  {topNews ? formatCropLabel(topNews.cultura) : "Sem destaque"}
-                </p>
-                <p className="mt-1 text-xs text-slate-400">
-                  {topNews
-                    ? `${topNews.mentions} menção${topNews.mentions === 1 ? "" : "ões"} recentes`
-                    : "Sem leitura disponível"}
-                </p>
+              <div className="space-y-3">
+                <span className="text-[9px] font-bold uppercase text-brand-stone-400 block">Manchetes Recentes</span>
+                {agroSentiment.latest_headlines.slice(0, 3).map((h, i) => (
+                  <div key={i} className="p-3 rounded-lg border border-brand-stone-200 bg-white/50 text-[10px] text-brand-stone-600 leading-snug">
+                    {h.title}
+                  </div>
+                ))}
               </div>
             </div>
-
-            <div className="space-y-4">
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  Notícias no radar
-                </p>
-
-                {radarEditorialHighlights.length === 0 ? (
-                  <p className="text-sm text-slate-300">
-                    Sem destaques editoriais recentes.
-                  </p>
-                ) : (
-                  <div className="space-y-3">
-                    {radarEditorialHighlights.map((item) => {
-                      const topNewsItem = item.recent_news?.[0];
-                      return (
-                        <div
-                          key={`editorial-${item.cultura}`}
-                          className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3"
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <p className="text-sm font-semibold text-slate-100">
-                              {formatCropLabel(item.cultura)}
-                            </p>
-                            <span className="rounded-full border border-slate-700 bg-slate-800 px-2 py-1 text-[11px] font-semibold text-slate-300">
-                              {item.mentions} menção{item.mentions === 1 ? "" : "ões"}
-                            </span>
-                          </div>
-
-                          {topNewsItem?.title && (
-                            <p className="mt-2 text-sm leading-6 text-slate-300">
-                              {topNewsItem.title}
-                            </p>
-                          )}
-
-                          {(topNewsItem?.date || topNewsItem?.source) && (
-                            <p className="mt-2 text-xs text-slate-500">
-                              {[topNewsItem.date, topNewsItem.source]
-                                .filter(Boolean)
-                                .join(" • ")}
-                            </p>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  Emergentes estatísticos
-                </p>
-
-                {radarStatEmergentes.length === 0 ? (
-                  <p className="text-sm text-slate-300">
-                    Sem culturas emergentes destacadas.
-                  </p>
-                ) : (
-                  <div className="space-y-3">
-                    {radarStatEmergentes.map((item) => (
-                      <div
-                        key={`stat-em-${item.cultura}`}
-                        className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3"
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="text-sm font-semibold text-slate-100">
-                            {item.label || formatCropLabel(item.cultura)}
-                          </p>
-                          <span
-                            className={`rounded-full border px-2 py-1 text-[11px] font-semibold ${getBucketBadgeClass(
-                              item.bucket
-                            )}`}
-                          >
-                            {item.bucket?.replaceAll("_", " ") || "-"}
-                          </span>
-                        </div>
-                        <p className="mt-2 text-sm text-slate-300">
-                          Crescimento de produção:{" "}
-                          <span className="font-semibold text-slate-100">
-                            {formatNumber(item.crescimento_producao_percent, 2)}%
-                          </span>
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  Pressões produtivas
-                </p>
-
-                {radarStatPressao.length === 0 ? (
-                  <p className="text-sm text-slate-300">
-                    Sem pressões relevantes destacadas.
-                  </p>
-                ) : (
-                  <div className="space-y-3">
-                    {radarStatPressao.map((item) => (
-                      <div
-                        key={`stat-pr-${item.cultura}`}
-                        className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3"
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="text-sm font-semibold text-slate-100">
-                            {item.label || formatCropLabel(item.cultura)}
-                          </p>
-                          <span
-                            className={`rounded-full border px-2 py-1 text-[11px] font-semibold ${getBucketBadgeClass(
-                              item.bucket
-                            )}`}
-                          >
-                            {item.bucket?.replaceAll("_", " ") || "-"}
-                          </span>
-                        </div>
-                        <p className="mt-2 text-sm text-slate-300">
-                          Tendência:{" "}
-                          <span className="font-semibold text-slate-100">
-                            {item.tendencia?.replaceAll("_", " ") || "-"}
-                          </span>
-                          {" • "}
-                          Δ produção{" "}
-                          <span className="font-semibold text-slate-100">
-                            {formatNumber(item.crescimento_producao_percent, 2)}%
-                          </span>
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  Watchlist de culturas
-                </p>
-
-                {(emergingRadar?.watchlist?.length || 0) === 0 &&
-                (emergingRadar?.discovered?.length || 0) === 0 ? (
-                  <p className="text-sm text-slate-300">
-                    Sem sinais relevantes na watchlist no momento.
-                  </p>
-                ) : (
-                  <div className="space-y-3">
-                    {(emergingRadar?.watchlist || []).slice(0, 4).map((item, idx) => (
-                      <div
-                        key={`watch-${idx}-${item.crop_id || item.crop}`}
-                        className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3"
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="text-sm font-semibold text-slate-100">
-                            {item.crop || item.crop_id || "-"}
-                          </p>
-                          <span className="rounded-full border border-slate-700 bg-slate-800 px-2 py-1 text-[11px] font-semibold text-slate-300">
-                            {formatInteger(item.mentions || 0)} sinal
-                            {(item.mentions || 0) === 1 ? "" : "s"}
-                          </span>
-                        </div>
-                        {item.categoria && (
-                          <p className="mt-2 text-xs text-slate-400">
-                            Categoria: {item.categoria}
-                          </p>
-                        )}
-                      </div>
-                    ))}
-
-                    {(emergingRadar?.discovered || []).slice(0, 3).map((item, idx) => (
-                      <div
-                        key={`disc-${idx}-${item.crop}`}
-                        className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3"
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="text-sm font-semibold text-slate-100">
-                            {item.crop || "-"}
-                          </p>
-                          <span className="rounded-full border border-slate-700 bg-slate-800 px-2 py-1 text-[11px] font-semibold text-slate-300">
-                            descoberta • {formatInteger(item.mentions || 0)}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+          ) : (
+            <p className="text-xs text-brand-stone-400 italic">Selecione os filtros para carregar o sentimento.</p>
+          )}
         </div>
       </div>
     </div>

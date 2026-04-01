@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { ArrowRight } from "lucide-react";
 import HedgeEditorialPortal from "@/components/HedgeEditorialPortal";
 
 type ViewMode = "home" | "portal";
@@ -28,15 +29,15 @@ class PortalErrorBoundary extends React.Component<
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-black px-4 py-10 text-slate-100 md:px-6 lg:px-8">
-          <div className="mx-auto max-w-3xl rounded-3xl border border-red-900/70 bg-red-950/20 p-6 shadow-2xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-red-300/80">
+        <div className="min-h-screen bg-brand-bg px-4 py-10 text-brand-stone-600 md:px-6 lg:px-8 font-brand">
+          <div className="mx-auto max-w-3xl rounded-3xl border border-red-200 bg-white p-6 shadow-2xl reveal active">
+            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-red-600">
               Falha ao abrir a plataforma
             </p>
-            <h1 className="mt-3 text-2xl font-bold text-white">
+            <h1 className="mt-3 text-2xl font-bold text-brand-dark">
               O portal encontrou um erro de renderização.
             </h1>
-            <p className="mt-4 text-sm leading-6 text-slate-300">
+            <p className="mt-4 text-sm leading-6 text-brand-stone-600">
               {this.state.message}
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
@@ -46,7 +47,7 @@ class PortalErrorBoundary extends React.Component<
                   this.setState({ hasError: false, message: "" });
                   this.props.onReset();
                 }}
-                className="rounded-2xl border border-emerald-700 bg-emerald-500 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400"
+                className="rounded-2xl border border-brand-blue bg-brand-blue px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90"
               >
                 Voltar à entrada
               </button>
@@ -109,10 +110,13 @@ export default function PortalClient() {
 
   if (!isReady) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-black text-slate-100">
+      <div className="min-h-screen bg-brand-bg text-brand-stone-600 font-brand">
         <div className="mx-auto flex min-h-screen max-w-7xl items-center justify-center px-4 py-10 md:px-6 lg:px-8">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/80 px-5 py-4 text-sm text-slate-300 shadow-xl">
-            Carregando ambiente...
+          <div className="rounded-2xl border border-brand-stone-300 bg-white px-8 py-6 text-sm text-brand-stone-600 shadow-xl reveal active">
+            <div className="flex items-center gap-3">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-brand-blue border-t-transparent" />
+              <span>Inicializando ambiente...</span>
+            </div>
           </div>
         </div>
       </div>
@@ -128,93 +132,29 @@ export default function PortalClient() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-black text-slate-100">
-      <div className="mx-auto flex min-h-screen max-w-7xl flex-col justify-center px-4 py-10 md:px-6 lg:px-8">
-        <div className="grid items-center gap-8 lg:grid-cols-2">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-emerald-400/80">
-              Agro Intelligence Engine
-            </p>
-
-            <h1 className="mt-3 text-4xl font-bold tracking-tight text-white md:text-5xl">
-              Terminal analítico agro
-            </h1>
-
-            <p className="mt-5 max-w-2xl text-base leading-7 text-slate-300 md:text-lg">
-              Plataforma analítica privada para monitoramento de mercado futuro,
-              basis porto versus interior, sentimento, backtest, forecast,
-              produção agrícola e risco agroclimático.
-            </p>
-
-            <div className="mt-8 flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={goPortal}
-                className="rounded-2xl border border-emerald-700 bg-emerald-500 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400"
-              >
-                Entrar na Plataforma
-              </button>
-
-              <span className="rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-slate-300">
-                V1 privada
-              </span>
-            </div>
+    <div className="flex min-h-screen flex-col bg-brand-bg font-brand">
+      <div className="flex flex-1 flex-col items-center justify-center p-6">
+        <div className="w-full max-w-4xl text-center reveal active">
+          <div className="mb-12 flex justify-center">
+            <span className="logo-timac-on-bege logo-timac-on-bege-lg">
+              <img src="/logo-timac.png" alt="Timac AGRO" />
+            </span>
           </div>
-
-          <div className="rounded-3xl border border-slate-800/80 bg-slate-900/80 p-6 shadow-2xl backdrop-blur-sm">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
-                <p className="text-xs uppercase tracking-wide text-slate-400">
-                  Mercado
-                </p>
-                <p className="mt-2 text-lg font-semibold text-slate-100">
-                  Forecast + Backtest
-                </p>
-                <p className="mt-2 text-sm leading-6 text-slate-400">
-                  Modelos comparativos, estratégia sugerida e leitura quantitativa
-                  para commodities monitoradas.
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
-                <p className="text-xs uppercase tracking-wide text-slate-400">
-                  Basis
-                </p>
-                <p className="mt-2 text-lg font-semibold text-slate-100">
-                  Porto vs Interior
-                </p>
-                <p className="mt-2 text-sm leading-6 text-slate-400">
-                  Monitoramento do diferencial da soja com MA30, classificação e
-                  radar de arbitragem.
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
-                <p className="text-xs uppercase tracking-wide text-slate-400">
-                  Clima
-                </p>
-                <p className="mt-2 text-lg font-semibold text-slate-100">
-                  Mapa agroclimático
-                </p>
-                <p className="mt-2 text-sm leading-6 text-slate-400">
-                  Visualização territorial com leitura de risco municipal e apoio
-                  à decisão.
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
-                <p className="text-xs uppercase tracking-wide text-slate-400">
-                  Produção
-                </p>
-                <p className="mt-2 text-lg font-semibold text-slate-100">
-                  Painel agrícola
-                </p>
-                <p className="mt-2 text-sm leading-6 text-slate-400">
-                  Visão integrada de produção, contexto agrícola e inteligência
-                  operacional.
-                </p>
-              </div>
-            </div>
+          <h1 className="mb-6 text-5xl font-bold tracking-tighter text-brand-dark md:text-7xl">
+            Monitor de <span className="text-brand-blue">Risco Agro</span>
+          </h1>
+          <p className="mx-auto mb-12 max-w-2xl text-lg leading-relaxed text-brand-stone-600">
+            Plataforma avançada de inteligência quantitativa para monitoramento de mercados, 
+            clima e produção agrícola.
+          </p>
+          <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
+            <button
+              onClick={goPortal}
+              className="group flex items-center gap-3 rounded-2xl border border-brand-blue bg-brand-blue px-8 py-4 text-lg font-bold text-white shadow-xl transition hover:opacity-90"
+            >
+              Acessar Monitor
+              <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
+            </button>
           </div>
         </div>
       </div>

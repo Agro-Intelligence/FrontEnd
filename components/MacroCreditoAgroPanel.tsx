@@ -113,6 +113,24 @@ type SeriesResponse = {
   };
 };
 
+type MacroNewsItem = {
+  title: string;
+  link: string;
+  summary: string | null;
+  published: string | null;
+  source: string;
+  region: "br" | "global";
+};
+
+type MacroNewsResponse = {
+  fetched_at: string;
+  aggregator?: string;
+  focus?: string[];
+  feed_axes?: string[];
+  items: MacroNewsItem[];
+  unavailable_sources?: string[] | null;
+};
+
 function formatNumber(value?: number | null, digits = 2): string {
   if (value === null || value === undefined || Number.isNaN(value)) return "-";
   return value.toLocaleString("pt-BR", {
@@ -146,6 +164,20 @@ function formatShortDate(value?: string | null): string {
   });
 }
 
+function formatNewsDate(value?: string | null): string {
+  if (!value) return "";
+  const t = Date.parse(value);
+  if (!Number.isNaN(t)) {
+    return new Date(t).toLocaleString("pt-BR", {
+      day: "2-digit",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+  return value.slice(0, 16);
+}
+
 function getSafeYDomain(
   values: Array<number | null | undefined>,
   padRatio = 0.08
@@ -173,13 +205,13 @@ function getSafeYDomain(
 function chartTooltipStyle() {
   return {
     contentStyle: {
-      backgroundColor: "#0f172a",
-      border: "1px solid #334155",
-      color: "#f8fafc",
+      backgroundColor: "#ffffff",
+      border: "1px solid #d6d3d1",
+      color: "#1c1917",
       borderRadius: "14px",
-      boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
+      boxShadow: "0 10px 30px rgba(0,0,0,0.1)",
     },
-    labelStyle: { color: "#f8fafc" },
+    labelStyle: { color: "#1c1917", fontWeight: "bold" },
   };
 }
 
@@ -212,11 +244,11 @@ function buildMultiLineData(seriesList: Array<SeriesEntry | undefined>) {
 function getRegimeBadgeClass(badge?: string) {
   switch (badge) {
     case "restrictive":
-      return "bg-red-950/70 text-red-300 border-red-800";
+      return "bg-red-50 text-red-700 border-red-200";
     case "pro_export":
-      return "bg-emerald-950/70 text-emerald-300 border-emerald-800";
+      return "bg-emerald-50 text-emerald-700 border-emerald-200";
     default:
-      return "bg-amber-950/70 text-amber-300 border-amber-800";
+      return "bg-amber-50 text-amber-700 border-amber-200";
   }
 }
 
@@ -226,6 +258,9 @@ export default function MacroCreditoAgroPanel() {
   const [regime, setRegime] = useState<RegimeResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [panelError, setPanelError] = useState<string | null>(null);
+  const [news, setNews] = useState<MacroNewsResponse | null>(null);
+  const [newsError, setNewsError] = useState<string | null>(null);
+  const [newsLoading, setNewsLoading] = useState(true);
 
   async function loadPanel() {
     try {
@@ -269,6 +304,31 @@ export default function MacroCreditoAgroPanel() {
 
   useEffect(() => {
     loadPanel();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        setNewsError(null);
+        setNewsLoading(true);
+        const res = await fetch(`${API_BASE_URL}/macro-credito-agro/news?limit=20`);
+        if (!res.ok) throw new Error("Não foi possível carregar as notícias.");
+        const data: MacroNewsResponse = await res.json();
+        if (!cancelled) setNews(data);
+      } catch (e) {
+        if (!cancelled) {
+          setNewsError(
+            e instanceof Error ? e.message : "Falha ao carregar notícias."
+          );
+        }
+      } finally {
+        if (!cancelled) setNewsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const selicChartData = useMemo(
@@ -360,513 +420,326 @@ export default function MacroCreditoAgroPanel() {
 
   const activeRegime = regime?.regime ?? overview?.regime;
 
+  const newsBr = useMemo(
+    () => news?.items.filter((i) => i.region === "br") ?? [],
+    [news]
+  );
+  const newsGlobal = useMemo(
+    () => news?.items.filter((i) => i.region === "global") ?? [],
+    [news]
+  );
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-0">
       {panelError && (
-        <div className="rounded-2xl border border-red-900 bg-red-950/40 p-4 text-sm text-red-300">
+        <div className="mx-8 mt-8 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           {panelError}
         </div>
       )}
 
       {loading && (
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-4 text-sm text-slate-300 shadow-sm backdrop-blur">
+        <div className="p-8 flex items-center gap-3 text-xs text-brand-stone-600">
+          <div className="w-4 h-4 border-2 border-brand-blue border-t-transparent rounded-full animate-spin"></div>
           Carregando Macro & Crédito Agro...
         </div>
       )}
 
-      <div className="rounded-3xl border border-slate-800/80 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 p-6 shadow-2xl">
-        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <p className="text-sm font-medium uppercase tracking-wide text-slate-400">
-              Banco Central do Brasil
-            </p>
-            <h2 className="mt-1 text-3xl font-bold tracking-tight text-white">
-              Macro & Crédito Agro
-            </h2>
-            <p className="mt-2 max-w-3xl text-sm text-slate-300">
-              Painel macroeconômico com SELIC, câmbio USD/BRL, expectativas Focus
-              de IPCA, inadimplência do crédito rural e um indicador executivo de regime.
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-slate-700 bg-slate-900/70 px-4 py-3 text-sm text-slate-300">
-            Faixa: {overview?.start ?? "2020-01-01"} até {overview?.end ?? "-"}
-          </div>
+      {/* Overview Cards Section */}
+      <div className="grid grid-cols-1 md:grid-cols-5 border-b border-stone-300">
+        <div className="p-8 border-r border-stone-300 group hover:bg-white transition-colors">
+          <span className="ds-field-label block mb-2">{cards?.selic.label ?? "SELIC"}</span>
+          <span className="text-3xl font-bold tracking-tighter text-brand-dark">{formatNumber(cards?.selic.last_value)}%</span>
+          <span className="text-[9px] text-brand-stone-400 block mt-2">Ref: {formatDateOnly(cards?.selic.last_date)}</span>
+        </div>
+        <div className="p-8 border-r border-stone-300 group hover:bg-white transition-colors">
+          <span className="ds-field-label block mb-2">{cards?.usd.label ?? "USD/BRL"}</span>
+          <span className="text-3xl font-bold tracking-tighter text-brand-dark">{formatNumber(cards?.usd.last_value)}</span>
+          <span className="text-[9px] text-brand-stone-400 block mt-2">Ref: {formatDateOnly(cards?.usd.last_date)}</span>
+        </div>
+        <div className="p-8 border-r border-stone-300 group hover:bg-white transition-colors">
+          <span className="ds-field-label block mb-2">IPCA Focus</span>
+          <span className="text-3xl font-bold tracking-tighter text-brand-dark">{formatNumber(cards?.ipca_expectation.last_value)}%</span>
+          <span className="text-[9px] text-brand-stone-400 block mt-2">Ref: {formatDateOnly(cards?.ipca_expectation.last_date)}</span>
+        </div>
+        <div className="p-8 border-r border-stone-300 group hover:bg-white transition-colors">
+          <span className="ds-field-label block mb-2">PF Crédito Rural</span>
+          <span className="text-3xl font-bold tracking-tighter text-brand-dark">{formatNumber(cards?.pf_credito_rural_total.last_value)}%</span>
+          <span className="text-[9px] text-brand-stone-400 block mt-2">Ref: {formatDateOnly(cards?.pf_credito_rural_total.last_date)}</span>
+        </div>
+        <div className="p-8 group hover:bg-white transition-colors">
+          <span className="ds-field-label block mb-2">PJ Crédito Rural</span>
+          <span className="text-3xl font-bold tracking-tighter text-brand-dark">{formatNumber(cards?.pj_credito_rural_total.last_value)}%</span>
+          <span className="text-[9px] text-brand-stone-400 block mt-2">Ref: {formatDateOnly(cards?.pj_credito_rural_total.last_date)}</span>
         </div>
       </div>
 
-      {activeRegime && (
-        <div className="rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl">
-          <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+      {/* Notícias — crédito rural / agronegócio / macro */}
+      <div className="border-b border-stone-300 bg-stone-100/40">
+        <div className="p-8 pb-6">
+          <span className="ds-field-label block mb-1">
+            Notícias
+          </span>
+          <h3 className="text-xl font-bold tracking-tighter text-brand-dark">
+            Agro, economia e mercado
+          </h3>
+          <div className="mt-4 flex flex-col gap-5 sm:flex-row sm:flex-wrap sm:items-start sm:gap-x-10 sm:gap-y-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300/80">
-                Indicador Inteligente
-              </p>
-              <h3 className="mt-1 text-2xl font-semibold text-slate-100">
-                Regime Macro Agro
-              </h3>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-                {activeRegime.summary}
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <span
-                className={`rounded-full border px-3 py-1 text-xs font-semibold ${getRegimeBadgeClass(
-                  activeRegime.badge
-                )}`}
-              >
-                {activeRegime.label}
-              </span>
-              <span className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs font-semibold text-slate-200">
-                Score: {activeRegime.score}
+              <span className="ds-field-label mb-1 block">Fonte</span>
+              <span className="inline-block rounded-full bg-amber-50 px-2 py-0.5 text-[9px] font-bold uppercase text-amber-700">
+                {news?.aggregator ?? "google_news_rss"}
               </span>
             </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-400">
-                SELIC
-              </p>
-              <p className="mt-1 text-lg font-semibold text-slate-100">
-                {activeRegime.signals.selic_level}
-              </p>
-              <p className="mt-1 text-xs text-slate-500">
-                {formatNumber(activeRegime.latest.selic.value)}% •{" "}
-                {formatDateOnly(activeRegime.latest.selic.date)}
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-400">
-                IPCA Focus
-              </p>
-              <p className="mt-1 text-lg font-semibold text-slate-100">
-                {activeRegime.signals.ipca_signal}
-              </p>
-              <p className="mt-1 text-xs text-slate-500">
-                {formatNumber(activeRegime.latest.ipca_expectation.value)}% •{" "}
-                {formatDateOnly(activeRegime.latest.ipca_expectation.date)}
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-400">
-                USD/BRL
-              </p>
-              <p className="mt-1 text-lg font-semibold text-slate-100">
-                {activeRegime.signals.usd_direction}
-              </p>
-              <p className="mt-1 text-xs text-slate-500">
-                Δ recente: {formatPercent(activeRegime.latest.usd.delta_pct)}
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-400">
-                Inadimplência Rural
-              </p>
-              <p className="mt-1 text-lg font-semibold text-slate-100">
-                {activeRegime.signals.inadimplencia_direction}
-              </p>
-              <p className="mt-1 text-xs text-slate-500">
-                Δ abs.: {formatNumber(activeRegime.latest.inadimplencia_rural_media.delta_abs)} p.p.
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950/45 p-4">
-            <p className="mb-3 text-xs uppercase tracking-wide text-slate-400">
-              Vetores do score
-            </p>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-              {activeRegime.contributions.map((item, idx) => (
-                <div
-                  key={`${item.factor}-${idx}`}
-                  className="rounded-2xl border border-slate-700 bg-slate-900/60 p-3"
-                >
-                  <p className="text-xs uppercase tracking-wide text-slate-400">
-                    {item.factor}
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-slate-100">
-                    {item.signal}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Impacto no score: {item.impact > 0 ? `+${item.impact}` : item.impact}
-                  </p>
+            {news?.focus && news.focus.length > 0 && (
+              <div className="min-w-0 max-w-3xl flex-1">
+                <span className="ds-field-label mb-2 block">Eixos</span>
+                <div className="flex flex-wrap gap-2">
+                  {news.focus.map((tag) => (
+                    <span
+                      key={tag}
+                      className="inline-block rounded-full bg-amber-50 px-2 py-0.5 text-[9px] font-bold uppercase text-amber-700"
+                    >
+                      {tag}
+                    </span>
+                  ))}
                 </div>
-              ))}
+              </div>
+            )}
+          </div>
+          {news?.fetched_at && (
+            <p className="mt-1 text-[10px] font-mono text-brand-stone-400">
+              Coletado em {formatNewsDate(news.fetched_at)}
+            </p>
+          )}
+        </div>
+
+        {newsError && (
+          <div className="px-8 pb-4 text-xs text-amber-800 bg-amber-50/80 border-t border-amber-100">
+            {newsError}
+          </div>
+        )}
+
+        {!newsError && !newsLoading && news && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 border-t border-stone-200">
+            <div className="border-b lg:border-b-0 lg:border-r border-stone-200 p-8 pt-6">
+              <span className="ds-field-label mb-4 block text-brand-blue">
+                Brasil
+              </span>
+              <ul className="space-y-4">
+                {newsBr.slice(0, 12).map((item) => (
+                  <li key={item.link} className="group">
+                    <a
+                      href={item.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-sm font-medium text-brand-dark leading-snug hover:text-brand-blue transition-colors"
+                    >
+                      {item.title}
+                    </a>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-brand-stone-500">
+                      <span>{item.source}</span>
+                      {item.published && (
+                        <>
+                          <span aria-hidden>·</span>
+                          <span>{formatNewsDate(item.published)}</span>
+                        </>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              {newsBr.length === 0 && (
+                <p className="text-xs text-brand-stone-500">Nenhuma notícia nesta coluna.</p>
+              )}
+            </div>
+            <div className="p-8 pt-6">
+              <span className="ds-field-label mb-4 block">
+                Mundo
+              </span>
+              <ul className="space-y-4">
+                {newsGlobal.slice(0, 12).map((item) => (
+                  <li key={item.link} className="group">
+                    <a
+                      href={item.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-sm font-medium text-brand-dark leading-snug hover:text-brand-blue transition-colors"
+                    >
+                      {item.title}
+                    </a>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-brand-stone-500">
+                      <span>{item.source}</span>
+                      {item.published && (
+                        <>
+                          <span aria-hidden>·</span>
+                          <span>{formatNewsDate(item.published)}</span>
+                        </>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              {newsGlobal.length === 0 && (
+                <p className="text-xs text-brand-stone-500">Nenhuma notícia nesta coluna.</p>
+              )}
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <div className="rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl">
-          <p className="text-xs uppercase tracking-wide text-slate-400">
-            {cards?.selic.label ?? "SELIC"}
-          </p>
-          <p className="mt-2 text-2xl font-bold text-white">
-            {formatNumber(cards?.selic.last_value)}%
-          </p>
-          <p className="mt-2 text-xs text-slate-500">
-            Ref.: {formatDateOnly(cards?.selic.last_date)}
-          </p>
-        </div>
+        {newsLoading && (
+          <div className="px-8 pb-8 flex items-center gap-2 text-xs text-brand-stone-500">
+            <div className="w-3 h-3 border-2 border-brand-blue border-t-transparent rounded-full animate-spin" />
+            Carregando notícias…
+          </div>
+        )}
 
-        <div className="rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl">
-          <p className="text-xs uppercase tracking-wide text-slate-400">
-            {cards?.usd.label ?? "USD/BRL"}
+        {news?.unavailable_sources && news.unavailable_sources.length > 0 && (
+          <p className="px-8 pb-6 text-[10px] text-brand-stone-400">
+            Alguns feeds não responderam: {news.unavailable_sources.join(", ")}.
           </p>
-          <p className="mt-2 text-2xl font-bold text-white">
-            {formatNumber(cards?.usd.last_value)}
-          </p>
-          <p className="mt-2 text-xs text-slate-500">
-            Ref.: {formatDateOnly(cards?.usd.last_date)}
-          </p>
-        </div>
-
-        <div className="rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl">
-          <p className="text-xs uppercase tracking-wide text-slate-400">
-            {cards?.ipca_expectation.label ?? "IPCA Focus 2026"}
-          </p>
-          <p className="mt-2 text-2xl font-bold text-white">
-            {formatNumber(cards?.ipca_expectation.last_value)}%
-          </p>
-          <p className="mt-2 text-xs text-slate-500">
-            Métrica: {cards?.ipca_expectation.metric ?? "Media"} • Ref.:{" "}
-            {formatDateOnly(cards?.ipca_expectation.last_date)}
-          </p>
-        </div>
-
-        <div className="rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl">
-          <p className="text-xs uppercase tracking-wide text-slate-400">
-            {cards?.pf_credito_rural_total.label ?? "PF Crédito Rural - Total"}
-          </p>
-          <p className="mt-2 text-2xl font-bold text-white">
-            {formatNumber(cards?.pf_credito_rural_total.last_value)}%
-          </p>
-          <p className="mt-2 text-xs text-slate-500">
-            Ref.: {formatDateOnly(cards?.pf_credito_rural_total.last_date)}
-          </p>
-        </div>
-
-        <div className="rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl">
-          <p className="text-xs uppercase tracking-wide text-slate-400">
-            {cards?.pj_credito_rural_total.label ?? "PJ Crédito Rural - Total"}
-          </p>
-          <p className="mt-2 text-2xl font-bold text-white">
-            {formatNumber(cards?.pj_credito_rural_total.last_value)}%
-          </p>
-          <p className="mt-2 text-xs text-slate-500">
-            Ref.: {formatDateOnly(cards?.pj_credito_rural_total.last_date)}
-          </p>
-        </div>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
-        <div className="rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl xl:col-span-6">
-          <div className="mb-4">
-            <h3 className="text-xl font-semibold text-slate-100">SELIC</h3>
-            <p className="text-sm text-slate-400">
-              Série histórica da taxa SELIC via SGS.
-            </p>
+      {/* Charts Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-12 border-b border-stone-300">
+        <div className="col-span-1 md:col-span-6 p-8 border-r border-stone-300">
+          <div className="mb-6">
+            <span className="ds-field-label block mb-1">Taxa de Juros</span>
+            <h3 className="text-2xl font-bold tracking-tighter text-brand-dark">Série SELIC</h3>
           </div>
-
-          <div className="h-[320px]">
+          <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={selicChartData}>
                 <defs>
                   <linearGradient id="selicFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={EMERALD} stopOpacity={0.35} />
-                    <stop offset="100%" stopColor={EMERALD} stopOpacity={0.03} />
+                    <stop offset="0%" stopColor={EMERALD} stopOpacity={0.1} />
+                    <stop offset="100%" stopColor={EMERALD} stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fontSize: 11, fill: "#cbd5e1" }}
-                  tickFormatter={(value) => formatShortDate(String(value))}
-                  minTickGap={24}
-                />
-                <YAxis
-                  domain={selicYDomain}
-                  tick={{ fontSize: 11, fill: "#cbd5e1" }}
-                  tickFormatter={(value) => `${formatNumber(Number(value), 2)}%`}
-                />
-                <Tooltip
-                  {...chartTooltipStyle()}
-                  labelFormatter={(label) => formatDateOnly(String(label))}
-                  formatter={(value: number | string | undefined) => [
-                    value == null ? "-" : `${formatNumber(Number(value), 2)}%`,
-                    "SELIC",
-                  ]}
-                />
-                <Legend />
-                <Area
-                  type="monotone"
-                  dataKey="value"
-                  name="SELIC"
-                  stroke={EMERALD}
-                  fill="url(#selicFill)"
-                  strokeWidth={2.5}
-                  dot={false}
-                />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#78716c" }} tickFormatter={formatShortDate} axisLine={{ stroke: '#d6d3d1' }} tickLine={false} />
+                <YAxis domain={selicYDomain} tick={{ fontSize: 10, fill: "#78716c" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}%`} />
+                <Tooltip contentStyle={chartTooltipStyle().contentStyle} />
+                <Area type="monotone" dataKey="value" name="SELIC" stroke={EMERALD} fill="url(#selicFill)" strokeWidth={2} dot={false} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
-
-        <div className="rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl xl:col-span-6">
-          <div className="mb-4">
-            <h3 className="text-xl font-semibold text-slate-100">USD/BRL</h3>
-            <p className="text-sm text-slate-400">
-              Série histórica do dólar capturada via módulo de moedas do python-bcb.
-            </p>
+        <div className="col-span-1 md:col-span-6 p-8">
+          <div className="mb-6">
+            <span className="ds-field-label block mb-1">Câmbio</span>
+            <h3 className="text-2xl font-bold tracking-tighter text-brand-dark">USD / BRL</h3>
           </div>
-
-          <div className="h-[320px]">
+          <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={usdChartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fontSize: 11, fill: "#cbd5e1" }}
-                  tickFormatter={(value) => formatShortDate(String(value))}
-                  minTickGap={24}
-                />
-                <YAxis
-                  domain={usdYDomain}
-                  tick={{ fontSize: 11, fill: "#cbd5e1" }}
-                  tickFormatter={(value) => formatNumber(Number(value), 2)}
-                />
-                <Tooltip
-                  {...chartTooltipStyle()}
-                  labelFormatter={(label) => formatDateOnly(String(label))}
-                  formatter={(value: number | string | undefined) => [
-                    value == null ? "-" : formatNumber(Number(value), 4),
-                    "USD/BRL",
-                  ]}
-                />
-                <Legend />
-                <Line
-                  type="monotone"
-                  dataKey="value"
-                  name="USD/BRL"
-                  stroke={SKY}
-                  strokeWidth={2.5}
-                  dot={false}
-                />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#78716c" }} tickFormatter={formatShortDate} axisLine={{ stroke: '#d6d3d1' }} tickLine={false} />
+                <YAxis domain={usdYDomain} tick={{ fontSize: 10, fill: "#78716c" }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={chartTooltipStyle().contentStyle} />
+                <Line type="monotone" dataKey="value" name="USD/BRL" stroke={SKY} strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
-        <div className="rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl xl:col-span-12">
-          <div className="mb-4">
-            <h3 className="text-xl font-semibold text-slate-100">
-              Focus — IPCA {overview?.ipca_reference_year ?? "2026"}
-            </h3>
-            <p className="text-sm text-slate-400">
-              Evolução da expectativa anual de mercado para o IPCA.
+      {/* IPCA Section */}
+      <div className="grid grid-cols-1 md:grid-cols-12 border-b border-stone-300">
+        <div className="col-span-1 md:col-span-4 border-r border-stone-300 bg-stone-100/60 p-8">
+          <div className="mb-8">
+            <span className="ds-field-label block mb-1">Expectativas Focus</span>
+            <h3 className="text-2xl font-bold tracking-tighter text-brand-dark">IPCA {overview?.ipca_reference_year}</h3>
+          </div>
+          <div className="space-y-4">
+            <div className="p-4 rounded-xl border border-stone-300 bg-white shadow-sm">
+              <span className="ds-field-label mb-1 block">Última Expectativa</span>
+              <span className="text-2xl font-bold text-brand-dark">{formatNumber(cards?.ipca_expectation.last_value)}%</span>
+            </div>
+            <p className="text-xs leading-relaxed text-brand-stone-600">
+              Acompanhamento das projeções de inflação do mercado financeiro para o horizonte de política monetária.
             </p>
           </div>
-
-          <div className="h-[320px]">
+        </div>
+        <div className="col-span-1 md:col-span-8 p-8">
+          <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={ipcaChartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fontSize: 11, fill: "#cbd5e1" }}
-                  tickFormatter={(value) => formatShortDate(String(value))}
-                  minTickGap={24}
-                />
-                <YAxis
-                  domain={ipcaYDomain}
-                  tick={{ fontSize: 11, fill: "#cbd5e1" }}
-                  tickFormatter={(value) => `${formatNumber(Number(value), 2)}%`}
-                />
-                <Tooltip
-                  {...chartTooltipStyle()}
-                  labelFormatter={(label) => formatDateOnly(String(label))}
-                  formatter={(value: number | string | undefined) => [
-                    value == null ? "-" : `${formatNumber(Number(value), 2)}%`,
-                    `IPCA ${overview?.ipca_reference_year ?? "2026"}`,
-                  ]}
-                />
-                <Legend />
-                <Line
-                  type="monotone"
-                  dataKey="value"
-                  name={`IPCA ${overview?.ipca_reference_year ?? "2026"}`}
-                  stroke={AMBER}
-                  strokeWidth={2.5}
-                  dot={false}
-                />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#78716c" }} tickFormatter={formatShortDate} axisLine={{ stroke: '#d6d3d1' }} tickLine={false} />
+                <YAxis domain={ipcaYDomain} tick={{ fontSize: 10, fill: "#78716c" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}%`} />
+                <Tooltip contentStyle={chartTooltipStyle().contentStyle} />
+                <Line type="monotone" dataKey="value" name="IPCA Focus" stroke={AMBER} strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
-        <div className="rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl xl:col-span-6">
-          <div className="mb-4">
-            <h3 className="text-xl font-semibold text-slate-100">
-              Inadimplência Crédito Rural — PF
-            </h3>
-            <p className="text-sm text-slate-400">
-              Pessoas físicas: taxas de mercado, reguladas e total.
-            </p>
+      {/* Rural Credit Section */}
+      <div className="grid grid-cols-1 md:grid-cols-12 border-b border-stone-300">
+        <div className="col-span-1 md:col-span-6 p-8 border-r border-stone-300">
+          <div className="mb-6">
+            <span className="ds-field-label block mb-1">Crédito Rural</span>
+            <h3 className="text-2xl font-bold tracking-tighter text-brand-dark">Inadimplência PF</h3>
           </div>
-
-          <div className="h-[340px]">
+          <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={pfChartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fontSize: 11, fill: "#cbd5e1" }}
-                  tickFormatter={(value) => formatShortDate(String(value))}
-                  minTickGap={24}
-                />
-                <YAxis
-                  domain={pfYDomain}
-                  tick={{ fontSize: 11, fill: "#cbd5e1" }}
-                  tickFormatter={(value) => `${formatNumber(Number(value), 2)}%`}
-                />
-                <Tooltip
-                  {...chartTooltipStyle()}
-                  labelFormatter={(label) => formatDateOnly(String(label))}
-                />
-                <Legend />
-                <Line
-                  type="monotone"
-                  dataKey="pf_credito_rural_mercado"
-                  name="PF Mercado"
-                  stroke={EMERALD}
-                  strokeWidth={2.2}
-                  dot={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="pf_credito_rural_regulado"
-                  name="PF Reguladas"
-                  stroke={SKY}
-                  strokeWidth={2.2}
-                  dot={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="pf_credito_rural_total"
-                  name="PF Total"
-                  stroke={SILVER}
-                  strokeWidth={2.4}
-                  dot={false}
-                />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#78716c" }} tickFormatter={formatShortDate} axisLine={{ stroke: '#d6d3d1' }} tickLine={false} />
+                <YAxis domain={pfYDomain} tick={{ fontSize: 10, fill: "#78716c" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}%`} />
+                <Tooltip contentStyle={chartTooltipStyle().contentStyle} />
+                <Legend iconType="circle" />
+                <Line type="monotone" dataKey="pf_credito_rural_mercado" name="Mercado" stroke={EMERALD} strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="pf_credito_rural_regulado" name="Regulado" stroke={SKY} strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="pf_credito_rural_total" name="Total" stroke={SILVER} strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
-
-        <div className="rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl xl:col-span-6">
-          <div className="mb-4">
-            <h3 className="text-xl font-semibold text-slate-100">
-              Inadimplência Crédito Rural — PJ
-            </h3>
-            <p className="text-sm text-slate-400">
-              Pessoas jurídicas: taxas de mercado, reguladas e total.
-            </p>
+        <div className="col-span-1 md:col-span-6 p-8">
+          <div className="mb-6">
+            <span className="ds-field-label block mb-1">Crédito Rural</span>
+            <h3 className="text-2xl font-bold tracking-tighter text-brand-dark">Inadimplência PJ</h3>
           </div>
-
-          <div className="h-[340px]">
+          <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={pjChartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fontSize: 11, fill: "#cbd5e1" }}
-                  tickFormatter={(value) => formatShortDate(String(value))}
-                  minTickGap={24}
-                />
-                <YAxis
-                  domain={pjYDomain}
-                  tick={{ fontSize: 11, fill: "#cbd5e1" }}
-                  tickFormatter={(value) => `${formatNumber(Number(value), 2)}%`}
-                />
-                <Tooltip
-                  {...chartTooltipStyle()}
-                  labelFormatter={(label) => formatDateOnly(String(label))}
-                />
-                <Legend />
-                <Line
-                  type="monotone"
-                  dataKey="pj_credito_rural_mercado"
-                  name="PJ Mercado"
-                  stroke={ROSE}
-                  strokeWidth={2.2}
-                  dot={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="pj_credito_rural_regulado"
-                  name="PJ Reguladas"
-                  stroke={CYAN}
-                  strokeWidth={2.2}
-                  dot={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="pj_credito_rural_total"
-                  name="PJ Total"
-                  stroke={SILVER}
-                  strokeWidth={2.4}
-                  dot={false}
-                />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#78716c" }} tickFormatter={formatShortDate} axisLine={{ stroke: '#d6d3d1' }} tickLine={false} />
+                <YAxis domain={pjYDomain} tick={{ fontSize: 10, fill: "#78716c" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}%`} />
+                <Tooltip contentStyle={chartTooltipStyle().contentStyle} />
+                <Legend iconType="circle" />
+                <Line type="monotone" dataKey="pj_credito_rural_mercado" name="Mercado" stroke={ROSE} strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="pj_credito_rural_regulado" name="Regulado" stroke={CYAN} strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="pj_credito_rural_total" name="Total" stroke={SILVER} strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
       </div>
 
-      <div className="rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl">
-        <div className="mb-4">
-          <h3 className="text-xl font-semibold text-slate-100">
-            Resumo de Crédito Rural
-          </h3>
-          <p className="text-sm text-slate-400">
-            Últimas leituras das séries de inadimplência monitoradas.
-          </p>
+      {/* Rural Credit Table Section */}
+      <div className="p-8">
+        <div className="mb-6">
+          <span className="ds-field-label block mb-1">Detalhamento</span>
+          <h3 className="text-2xl font-bold tracking-tighter text-brand-dark">Resumo de Inadimplência</h3>
         </div>
-
-        <div className="overflow-x-auto">
+        <div className="bg-white rounded-2xl border border-stone-300 shadow-sm overflow-hidden">
           <table className="min-w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-700 text-left text-slate-400">
-                <th className="py-2 pr-3">Série</th>
-                <th className="py-2 pr-3">Última data</th>
-                <th className="py-2 pr-3">Último valor</th>
+              <tr className="border-b border-stone-300 bg-stone-100/50 text-left text-brand-stone-600">
+                <th className="ds-field-label px-6 py-4 text-left">Série</th>
+                <th className="ds-field-label px-6 py-4 text-left">Última Data</th>
+                <th className="ds-field-label px-6 py-4 text-right">Último Valor</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-stone-200">
               {ruralSummaryRows.map((entry, index) => (
-                <tr
-                  key={entry.key || `credito-rural-${index}`}
-                  className="border-b border-slate-800 last:border-0"
-                >
-                  <td className="py-2 pr-3 font-medium text-slate-100">
-                    {entry.label ?? "-"}
-                  </td>
-                  <td className="py-2 pr-3 text-slate-300">
-                    {formatDateOnly(entry.last_date)}
-                  </td>
-                  <td className="py-2 pr-3 text-slate-300">
-                    {formatNumber(entry.last_value)}%
-                  </td>
+                <tr key={entry.key || `rural-${index}`} className="transition-colors hover:bg-stone-50">
+                  <td className="py-4 px-6 font-medium text-brand-dark">{entry.label}</td>
+                  <td className="py-4 px-6 text-brand-stone-600">{formatDateOnly(entry.last_date)}</td>
+                  <td className="py-4 px-6 text-brand-stone-600 text-right font-bold">{formatNumber(entry.last_value)}%</td>
                 </tr>
               ))}
             </tbody>

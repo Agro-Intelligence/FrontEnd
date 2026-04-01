@@ -48,6 +48,58 @@ const IIS_LINE_COLORS: Record<1 | 3 | 6, string> = {
   6: "#22C55E",
 };
 
+/** Mesmas legendas de série do gráfico IIS (tooltips em português) */
+const SERIE_FAIXA_HISTORICA = "Faixa Histórica";
+const SERIE_MEDIA = "Média";
+const SERIE_ANO_ATUAL = "Ano Atual";
+const SERIE_MEDIA_REF_PRECIP = "Média de referência";
+const SERIE_ACUMULADO_ANO = "Acumulado no ano";
+
+/** Faixa histórica: área suave e mais transparente para não competir com o ano atual */
+const COLOR_FAIXA_HISTORICA_FILL = "#64748b";
+const OPACIDADE_FAIXA_HISTORICA = 0.09;
+
+/**
+ * Média — teal com traço semi-transparente; pontilhado distingue do ano atual e da faixa.
+ */
+const COLOR_MEDIA_STROKE = "#115e59";
+const STROKE_OPACITY_MEDIA = 0.48;
+const STROKE_WIDTH_MEDIA = 2.5;
+/** Pontilhado (traços curtos + cap arredondado leem como pontos) */
+const STROKE_MEDIA_DASHARRAY = "1 5";
+
+const yAxisLabelTemp = {
+  value: "Temperatura (°C)",
+  angle: -90,
+  position: "insideLeft" as const,
+  offset: 8,
+  style: { fill: "#78716c", fontSize: 10, fontWeight: 600 },
+};
+
+const yAxisLabelMm = {
+  value: "Precipitação acumulada (mm)",
+  angle: -90,
+  position: "insideLeft" as const,
+  offset: 8,
+  style: { fill: "#78716c", fontSize: 10, fontWeight: 600 },
+};
+
+function tooltipFormatterTemp(value: unknown, name?: string): [string, string] {
+  const n = name ?? "";
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return [`${formatNumber(value, 1)} °C`, n];
+  }
+  return [value == null ? "—" : String(value), n];
+}
+
+function tooltipFormatterPrecipMm(value: unknown, name?: string): [string, string] {
+  const n = name ?? "";
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return [`${formatNumber(value, 0)} mm`, n];
+  }
+  return [value == null ? "—" : String(value), n];
+}
+
 /** Legendas dos tokens usados nos códigos mensais CONAB — ordem fenológica (5=F, 6=FM) */
 const CONAB_FASE_LEGENDA: { sigla: string; nome: string }[] = [
   { sigla: "PS", nome: "Pré-semeadura" },
@@ -289,6 +341,29 @@ function normalizeIbgeMuniCode(code: string | null | undefined): string {
   return s.padStart(7, "0");
 }
 
+/** Mensagem `detail` do FastAPI (string, lista de erros de validação, etc.). */
+async function readFastApiErrorDetail(res: Response): Promise<string> {
+  try {
+    const data: unknown = await res.json();
+    if (data && typeof data === "object" && "detail" in data) {
+      const d = (data as { detail: unknown }).detail;
+      if (typeof d === "string") return d;
+      if (Array.isArray(d)) {
+        return d
+          .map((item) =>
+            typeof item === "object" && item !== null && "msg" in item
+              ? String((item as { msg: unknown }).msg)
+              : String(item)
+          )
+          .join(" ");
+      }
+    }
+  } catch {
+    /* corpo não-JSON */
+  }
+  return res.statusText || `HTTP ${res.status}`;
+}
+
 function normalizeIbgeDigitsLoose(code: string | null | undefined): string {
   if (code == null || code === "") return "";
   const s = String(code).replace(/\D/g, "");
@@ -340,13 +415,13 @@ function parseFenologiaCulturasResponse(
 function chartTooltipStyle() {
   return {
     contentStyle: {
-      backgroundColor: "#0f172a",
-      border: "1px solid #334155",
-      color: "#f8fafc",
+      backgroundColor: "#ffffff",
+      border: "1px solid #d6d3d1",
+      color: "#1c1917",
       borderRadius: "14px",
-      boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
+      boxShadow: "0 10px 30px rgba(0,0,0,0.1)",
     },
-    labelStyle: { color: "#f8fafc" },
+    labelStyle: { color: "#1c1917", fontWeight: "bold" },
   };
 }
 
@@ -546,7 +621,7 @@ function buildPrecipInsight(monthlyRows: MonthlyClimateRow[]): string {
 
 function makeYearColor(index: number) {
   const palette = [
-    "#60A5FA",
+    "#0071B9",
     "#22C55E",
     "#F59E0B",
     "#A78BFA",
@@ -990,31 +1065,31 @@ function getInsightToneClasses(tone: AgroClimateInsight["tone"]) {
   switch (tone) {
     case "red":
       return {
-        border: "border-red-800/70",
-        bg: "bg-red-950/30",
-        badge: "bg-red-950/70 text-red-300 border-red-800",
-        title: "text-red-300",
+        border: "border-red-200",
+        bg: "bg-red-50",
+        badge: "bg-red-50 text-red-700 border-red-200",
+        title: "text-red-700",
       };
     case "yellow":
       return {
-        border: "border-amber-800/70",
-        bg: "bg-amber-950/25",
-        badge: "bg-amber-950/70 text-amber-300 border-amber-800",
-        title: "text-amber-300",
+        border: "border-amber-200",
+        bg: "bg-amber-50",
+        badge: "bg-amber-50 text-amber-700 border-amber-200",
+        title: "text-amber-700",
       };
     case "green":
       return {
-        border: "border-emerald-800/70",
-        bg: "bg-emerald-950/25",
-        badge: "bg-emerald-950/70 text-emerald-300 border-emerald-800",
-        title: "text-emerald-300",
+        border: "border-emerald-200",
+        bg: "bg-emerald-50",
+        badge: "bg-emerald-50 text-emerald-700 border-emerald-200",
+        title: "text-emerald-700",
       };
     default:
       return {
-        border: "border-sky-800/70",
-        bg: "bg-sky-950/25",
-        badge: "bg-sky-950/70 text-sky-300 border-sky-800",
-        title: "text-sky-300",
+        border: "border-sky-200",
+        bg: "bg-sky-50",
+        badge: "bg-sky-50 text-sky-700 border-sky-200",
+        title: "text-sky-700",
       };
   }
 }
@@ -1026,27 +1101,22 @@ function formatPhaseLabel(value?: string | null) {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-const FENOLOGIA_PANEL_TONE = {
-  border: "border-slate-700/80",
-  badge: "bg-slate-900/70 text-slate-300 border-slate-600",
-} as const;
-
 function climaTempBarClass(v?: ClimaVsMedia | null): string {
   if (v === "abaixo") return "bg-sky-500";
   if (v === "acima") return "bg-orange-500";
-  if (v === "proximo") return "bg-slate-500";
-  return "bg-slate-800";
+  if (v === "proximo") return "bg-brand-stone-500";
+  return "bg-brand-stone-200";
 }
 
 function climaPrecipBarClass(v?: ClimaVsMedia | null): string {
   if (v === "abaixo") return "bg-amber-700";
   if (v === "acima") return "bg-cyan-500";
-  if (v === "proximo") return "bg-slate-500";
-  return "bg-slate-800";
+  if (v === "proximo") return "bg-brand-stone-500";
+  return "bg-brand-stone-200";
 }
 
 function getIisClassColor(value: number | null | undefined): string {
-  if (value === null || value === undefined || Number.isNaN(value)) return "#475569";
+  if (value === null || value === undefined || Number.isNaN(value)) return "#78716c";
   if (value <= 1) return "#B91C1C";
   if (value <= 2) return "#DC2626";
   if (value <= 3) return "#F97316";
@@ -1077,8 +1147,7 @@ type FenologiaHeatmapCell = {
   monthLabel: string;
   isActive: boolean;
   isCurrent: boolean;
-  shortLabel: string;
-  fullLabel: string;
+  shortLabel: string; fullLabel: string;
   climaDisponivel: boolean;
   tempVs: ClimaVsMedia | null;
   precipVs: ClimaVsMedia | null;
@@ -1308,7 +1377,8 @@ export default function AgroClimaPanel({
           code_muni: codeMuni,
         });
 
-        if (uf) params.set("abbrev_state", uf);
+        /* Não enviar `abbrev_state` aqui: o backend filtra só por `code_muni`;
+         * UF desalinhada ao mapa gerava série vazia / 404. Cultura e IIS seguem opcionais. */
         if (selectedCulture) params.set("cultura", selectedCulture);
         if (selectedIisValue != null && Number.isFinite(selectedIisValue)) {
           params.set("iis_valor", String(selectedIisValue));
@@ -1316,15 +1386,24 @@ export default function AgroClimaPanel({
 
         const res = await fetch(
           `${API_BASE_URL}/agroclima/municipio?${params.toString()}`,
-          { cache: "no-store" }
+          { cache: "no-store", headers: { Accept: "application/json" } }
         );
-        if (!res.ok) throw new Error("Falha ao carregar série agroclimática");
+        if (!res.ok) {
+          const detail = await readFastApiErrorDetail(res);
+          throw new Error(
+            detail || "Falha ao carregar série agroclimática"
+          );
+        }
         const data: AgroClimaResponse = await res.json();
         setPayload(data);
       } catch (err) {
         console.error(err);
         setPayload(null);
-        setError("Não foi possível carregar os dados agroclimáticos.");
+        setError(
+          err instanceof Error && err.message
+            ? err.message
+            : "Não foi possível carregar os dados agroclimáticos. Verifique se a API está no ar e se o arquivo ERA5 municipal está em data/curated/agromet."
+        );
       } finally {
         setLoading(false);
       }
@@ -1557,32 +1636,25 @@ export default function AgroClimaPanel({
   const insightTone = getInsightToneClasses(climateInsight?.tone ?? "blue");
 
   return (
-    <div className="rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl backdrop-blur-sm">
-      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h3 className="text-xl font-semibold text-white">Painel Agroclimático</h3>
-          <p className="text-sm text-slate-400">
-            IIS histórico no estilo GEOGLAM + clima mensal por ano, com leitura mais enxuta entre mapa e painel.
-          </p>
-        </div>
-
-        {showSelector && (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+    <div className="space-y-0">
+      {showSelector && (
+        <div className="p-8 border-b border-brand-stone-300 bg-brand-bg/50">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 max-w-2xl">
             <div>
-              <label className="mb-1 block text-xs text-slate-400">UF</label>
+              <label className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-brand-stone-600">UF</label>
               <input
                 value={uf}
                 readOnly
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                className="w-full rounded-lg border border-brand-stone-300 bg-white px-4 py-2 text-sm text-brand-dark shadow-sm"
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs text-slate-400">Município</label>
+              <label className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-brand-stone-600">Município</label>
               <select
                 value={codeMuni}
                 onChange={(e) => setCodeMuni(e.target.value)}
                 disabled={loadingMunicipios}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                className="w-full rounded-lg border border-brand-stone-300 bg-white px-4 py-2 text-sm text-brand-dark shadow-sm outline-none focus:border-brand-blue"
               >
                 {municipios.map((item) => (
                   <option key={item.code_muni} value={item.code_muni}>
@@ -1592,942 +1664,386 @@ export default function AgroClimaPanel({
               </select>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {error && (
-        <div className="mb-4 rounded-2xl border border-red-900 bg-red-950/40 p-3 text-sm text-red-300">
+        <div className="mx-8 mt-8 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           {error}
         </div>
       )}
 
-      <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-4">
-        <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4">
-          <div className="text-xs uppercase tracking-wide text-slate-400">Município</div>
-          <div className="mt-2 text-lg font-semibold text-white">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 border-b border-brand-stone-300">
+        <div className="p-8 border-r border-brand-stone-300 group hover:bg-white transition-colors">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-brand-stone-600 block mb-2">Município</span>
+          <span className="text-2xl font-bold tracking-tighter text-brand-dark">
             {payload?.municipio?.name_muni || currentMunicipio?.name_muni || "—"}
-          </div>
-          <div className="text-sm text-slate-400">
-            {payload?.municipio?.abbrev_state ||
-              currentMunicipio?.abbrev_state ||
-              "—"}{" "}
-            · {payload?.municipio?.code_muni || currentMunicipio?.code_muni || "—"}
-          </div>
+          </span>
+          <span className="text-[9px] text-brand-stone-400 block mt-2">
+            {payload?.municipio?.abbrev_state || currentMunicipio?.abbrev_state || "—"} · {payload?.municipio?.code_muni || currentMunicipio?.code_muni || "—"}
+          </span>
         </div>
-
-        <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4">
-          <div className="text-xs uppercase tracking-wide text-slate-400">Último mês</div>
-          <div className="mt-2 text-2xl font-semibold text-white">
+        <div className="p-8 border-r border-brand-stone-300 group hover:bg-white transition-colors">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-brand-stone-600 block mb-2">Último Mês</span>
+          <span className="text-2xl font-bold tracking-tighter text-brand-dark">
             {latestMonthRow?.monthLabel || "—"} {latestMonthRow?.year || ""}
-          </div>
-          <div className="text-sm text-slate-400">janela mensal comparativa</div>
+          </span>
+          <span className="text-[9px] text-brand-stone-400 block mt-2">Janela mensal comparativa</span>
         </div>
-
-        <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4">
-          <div className="text-xs uppercase tracking-wide text-slate-400">Temp. média</div>
-          <div className="mt-2 text-2xl font-semibold text-white">
+        <div className="p-8 border-r border-brand-stone-300 group hover:bg-white transition-colors">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-brand-stone-600 block mb-2">Temp. Média</span>
+          <span className="text-2xl font-bold tracking-tighter text-brand-dark">
             {formatNumber(latestMonthRow?.temp_mean, 2)} °C
-          </div>
-          <div className="text-sm text-slate-400">
-            Min {formatNumber(latestMonthRow?.temp_min, 2)} · Max{" "}
-            {formatNumber(latestMonthRow?.temp_max, 2)}
-          </div>
+          </span>
+          <span className="text-[9px] text-brand-stone-400 block mt-2">
+            Min {formatNumber(latestMonthRow?.temp_min, 2)} · Max {formatNumber(latestMonthRow?.temp_max, 2)}
+          </span>
         </div>
-
-        <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4">
-          <div className="text-xs uppercase tracking-wide text-slate-400">Precip. mensal</div>
-          <div className="mt-2 text-2xl font-semibold text-white">
+        <div className="p-8 group hover:bg-white transition-colors">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-brand-stone-600 block mb-2">Precip. Mensal</span>
+          <span className="text-2xl font-bold tracking-tighter text-brand-dark">
             {formatNumber(latestMonthRow?.precip_sum, 2)} mm
-          </div>
-          <div className="text-sm text-slate-400">agregado mensal corrigido</div>
+          </span>
+          <span className="text-[9px] text-brand-stone-400 block mt-2">Agregado mensal corrigido</span>
         </div>
       </div>
 
-      <div
-        className={`mb-4 rounded-2xl border ${insightTone.border} ${insightTone.bg} p-4 shadow-lg`}
-      >
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <div className={`text-sm font-semibold ${insightTone.title}`}>
-              Diagnóstico Agroclimático
-            </div>
-            <div className="mt-2 text-sm text-slate-300">
-              Leitura automática combinando precipitação acumulada, temperatura e IIS.
-            </div>
+      {/* Diagnostic Section */}
+      <div className={`grid grid-cols-1 md:grid-cols-12 border-b border-brand-stone-300 ${insightTone.bg}`}>
+        <div className="col-span-1 md:col-span-4 p-8 border-r border-brand-stone-300">
+          <div className="mb-8">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-brand-stone-600 block mb-1">Diagnóstico</span>
+            <h3 className="text-2xl font-bold tracking-tighter text-brand-dark">Status Climático</h3>
           </div>
-
-          <div
-            className={`rounded-full border px-3 py-1 text-xs font-semibold ${insightTone.badge}`}
-          >
-            {climateInsight ? climateInsight.status : "Sem leitura suficiente"}
+          <div className="space-y-6">
+            <div className={`p-4 rounded-xl border ${insightTone.border} bg-white shadow-sm`}>
+              <span className="text-[9px] font-bold uppercase text-brand-stone-600 block mb-1">Leitura Atual</span>
+              <span className={`text-2xl font-bold ${insightTone.title}`}>{climateInsight?.status ?? "—"}</span>
+            </div>
+            <p className="text-xs leading-relaxed text-brand-stone-600">
+              {climateInsight?.summary ?? "Aguardando dados para diagnóstico automático."}
+            </p>
           </div>
         </div>
+        <div className="col-span-1 md:col-span-8 p-8">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-brand-stone-600 block mb-4">Drivers da Leitura</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {(climateInsight?.drivers || []).map((driver) => (
+              <div key={driver} className="rounded-xl border border-brand-stone-300 bg-white/50 px-4 py-3 text-sm text-brand-stone-600">
+                {driver}
+              </div>
+            ))}
+            {!climateInsight && <div className="text-xs text-brand-stone-400">Processando drivers...</div>}
+          </div>
+        </div>
+      </div>
 
-        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-12">
-          <div className="lg:col-span-4 rounded-2xl border border-slate-800 bg-slate-900/55 p-4">
-            <div className="text-xs uppercase tracking-wide text-slate-400">Status</div>
-            <div className="mt-2 text-2xl font-semibold text-white">
-              {climateInsight?.status ?? "—"}
+      {/* Fenologia Section */}
+      <div className="grid grid-cols-1 md:grid-cols-12 border-b border-brand-stone-300">
+        <div className="col-span-1 md:col-span-4 p-8 border-r border-brand-stone-300 bg-brand-bg/30">
+          <div className="mb-8">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-brand-stone-600 block mb-1">Fenologia</span>
+            <h3 className="text-2xl font-bold tracking-tighter text-brand-dark">Calendário CONAB</h3>
+          </div>
+          <div className="space-y-6">
+            <div>
+              <label className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-brand-stone-600">Cultura</label>
+              <select
+                value={selectedCulture}
+                onChange={(e) => setSelectedCulture(e.target.value)}
+                className="w-full rounded-lg border border-brand-stone-300 bg-white px-4 py-2 text-sm text-brand-dark shadow-sm outline-none focus:border-brand-blue"
+              >
+                {culturasOpcoes.map((o) => (
+                  <option key={o.cultura} value={o.cultura}>{o.label}</option>
+                ))}
+              </select>
             </div>
-            <div className="mt-2 text-sm leading-6 text-slate-300">
-              {climateInsight?.summary ??
-                "Ainda não há dados suficientes para gerar uma interpretação automática robusta."}
-            </div>
+            {fenologiaPayload && (
+              <div className="p-4 rounded-xl border border-brand-stone-300 bg-white shadow-sm">
+                <span className="text-[9px] font-bold uppercase text-brand-stone-600 block mb-1">Fase Atual</span>
+                <span className="text-lg font-bold text-brand-dark">{formatPhaseLabel(fenologiaPayload.fase_atual)}</span>
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="col-span-1 md:col-span-8 p-8">
+          <div className="grid grid-cols-6 sm:grid-cols-12 gap-2">
+            {fenologiaHeatmap.map((cell) => (
+              <div key={cell.month} className="space-y-1">
+                <div className="text-center text-[9px] font-bold uppercase text-brand-stone-400">{cell.monthLabel}</div>
+                <div className={`h-16 rounded-lg border flex flex-col items-center justify-center text-[10px] font-bold transition-all ${cell.isActive ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-brand-stone-200 bg-brand-bg/50 text-brand-stone-400'}`}>
+                  {cell.shortLabel}
+                  {cell.isActive && cell.climaDisponivel && (
+                    <div className="mt-1 flex flex-col gap-0.5 w-full px-1">
+                      <div className={`h-1 rounded-full w-full ${climaTempBarClass(cell.tempVs)}`} />
+                      <div className={`h-1 rounded-full w-full ${climaPrecipBarClass(cell.precipVs)}`} />
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
 
-          <div className="lg:col-span-3 rounded-2xl border border-slate-800 bg-slate-900/55 p-4">
-            <div className="text-xs uppercase tracking-wide text-slate-400">Score climático</div>
-            <div className="mt-2 text-2xl font-semibold text-white">
-              {climateInsight ? climateInsight.score : "—"}
-            </div>
-            <div className="mt-2 text-sm text-slate-400">
-              Escala qualitativa para priorização de monitoramento.
-            </div>
-          </div>
-
-          <div className="lg:col-span-5 rounded-2xl border border-slate-800 bg-slate-900/55 p-4">
-            <div className="text-xs uppercase tracking-wide text-slate-400">
-              Drivers da leitura
-            </div>
-            <div className="mt-2 space-y-2">
-              {(climateInsight?.drivers || []).slice(0, 4).map((driver) => (
+          <div className="mt-6 rounded-xl border border-brand-stone-200 bg-white/80 px-4 py-3">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-brand-stone-600 block mb-3">
+              Legenda — ciclo fenológico (CONAB)
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-2">
+              {CONAB_FASE_LEGENDA.map((item) => (
                 <div
-                  key={driver}
-                  className="rounded-xl border border-slate-800 bg-slate-800/55 px-3 py-2 text-sm text-slate-200"
+                  key={item.sigla}
+                  className="flex items-start gap-2 text-[10px] leading-snug text-brand-stone-600"
                 >
-                  {driver}
+                  <span className="shrink-0 rounded bg-brand-bg px-1.5 py-0.5 font-bold tabular-nums text-brand-dark ring-1 ring-brand-stone-200">
+                    {item.sigla}
+                  </span>
+                  <span>{item.nome}</span>
                 </div>
               ))}
-              {!climateInsight && (
-                <div className="rounded-xl border border-slate-800 bg-slate-800/55 px-3 py-2 text-sm text-slate-400">
-                  Dados insuficientes para detalhar os fatores dominantes.
-                </div>
-              )}
             </div>
           </div>
-        </div>
 
-        <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900/45 p-4">
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-            <div className="xl:col-span-5 rounded-2xl border border-slate-800 bg-slate-950/55 p-4">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs uppercase tracking-wide text-slate-400">
-                    Cultura de referência
-                  </div>
-                  <p className="mt-1 text-xs leading-relaxed text-slate-500">
-                    Calendário fenológico CONAB
-                    {fenologiaPayload?.safra_referencia
-                      ? ` · safra ${fenologiaPayload.safra_referencia}`
-                      : ""}
-                    {fenologiaPayload?.nome_municipio_conab
-                      ? ` · ${fenologiaPayload.nome_municipio_conab}`
-                      : payload?.municipio?.name_muni && codeMuni
-                        ? ` · ${payload.municipio.name_muni}`
-                        : ""}
-                    .
-                  </p>
-                </div>
-                <div className="w-full shrink-0 lg:max-w-[260px]">
-                  <label className="mb-1 block text-[10px] uppercase tracking-wide text-slate-500">
-                    Cultura (CONAB)
-                  </label>
-                  <select
-                    aria-label="Cultura de referência CONAB"
-                    value={
-                      culturasOpcoes.some((o) => o.cultura === selectedCulture)
-                        ? selectedCulture
-                        : ""
-                    }
-                    onChange={(e) => setSelectedCulture(e.target.value)}
-                    disabled={!codeMuni}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {!codeMuni && (
-                      <option value="">Selecione um município no mapa…</option>
-                    )}
-                    {codeMuni &&
-                      loading &&
-                      culturasOpcoes.length === 0 && (
-                        <option value="">Carregando culturas CONAB…</option>
-                      )}
-                    {codeMuni &&
-                      !loading &&
-                      culturasOpcoes.length === 0 && (
-                        <option value="">
-                          Nenhuma linha CONAB para o IBGE {codeMuni}
-                        </option>
-                      )}
-                    {culturasOpcoes.map(({ cultura, label }, idx) => (
-                      <option
-                        key={`${codeMuni}-${idx}-${cultura}`}
-                        value={cultura}
-                      >
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900/45 p-3">
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <div className="text-xs uppercase tracking-wide text-slate-400">
-                    Calendário fenológico
-                  </div>
-                  <div
-                    className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${FENOLOGIA_PANEL_TONE.badge}`}
-                  >
-                    {fenologiaPayload?.ano_clima_referencia != null
-                      ? `Série clima: ${fenologiaPayload.ano_clima_referencia}`
-                      : "Clima vs média local"}
-                  </div>
-                </div>
-
-                <div className="mb-3 rounded-xl border border-slate-800/90 bg-slate-950/55 p-3">
-                  <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
-                    Legenda — cada mês com estágio CONAB
-                  </div>
-                  <div className="mt-2 grid gap-3 text-[11px] text-slate-200 sm:grid-cols-2">
-                    <div>
-                      <div className="text-[10px] text-slate-500">Barra superior · temperatura média no mês</div>
-                      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-                        <span className="inline-flex items-center gap-1.5">
-                          <span className="h-2 w-7 rounded-sm bg-sky-500" />
-                          abaixo da média
-                        </span>
-                        <span className="inline-flex items-center gap-1.5">
-                          <span className="h-2 w-7 rounded-sm bg-slate-500" />
-                          próximo
-                        </span>
-                        <span className="inline-flex items-center gap-1.5">
-                          <span className="h-2 w-7 rounded-sm bg-orange-500" />
-                          acima da média
-                        </span>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-slate-500">Barra inferior · precipitação no mês</div>
-                      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-                        <span className="inline-flex items-center gap-1.5">
-                          <span className="h-2 w-7 rounded-sm bg-amber-700" />
-                          abaixo da média
-                        </span>
-                        <span className="inline-flex items-center gap-1.5">
-                          <span className="h-2 w-7 rounded-sm bg-slate-500" />
-                          próximo
-                        </span>
-                        <span className="inline-flex items-center gap-1.5">
-                          <span className="h-2 w-7 rounded-sm bg-cyan-500" />
-                          acima da média
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <p className="mt-2 text-[10px] leading-relaxed text-slate-500">
-                    Comparativo do último ano com dados completos em cada mês civil frente à climatologia
-                    (média de todos os anos da série neste município). Mínimo de 2 anos de histórico por mês.
-                  </p>
-                </div>
-
-                <div className="mb-3 rounded-xl border border-emerald-900/40 bg-emerald-950/20 p-3">
-                  <div className="text-[10px] font-medium uppercase tracking-wide text-emerald-600/90">
-                    Legenda — códigos fenológicos CONAB
-                  </div>
-                  <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
-                    Em cada mês ativo, o rótulo abrevia o estágio (ex.:{" "}
-                    <span className="font-mono text-slate-400">S/E/DV</span>). Barras combinadas indicam mais
-                    de um estágio no período.
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1.5 text-[10px] text-slate-300">
-                    {CONAB_FASE_LEGENDA.map(({ sigla, nome }) => (
-                      <span key={sigla} className="inline-flex items-baseline gap-1">
-                        <span className="font-mono font-semibold text-emerald-400/90">{sigla}</span>
-                        <span className="text-slate-500">{nome}</span>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-12 gap-1.5">
-                  {fenologiaHeatmap.map((cell) => {
-                    const tip = [
-                      cell.isActive
-                        ? `${cell.monthLabel}: ${cell.fullLabel}`
-                        : `${cell.monthLabel}: sem estágio CONAB`,
-                      cell.climaTooltip,
-                    ]
-                      .filter(Boolean)
-                      .join(" — ");
-                    return (
-                      <div key={cell.month} className="space-y-1">
-                        <div className="text-center text-[10px] font-medium uppercase tracking-wide text-slate-500">
-                          {cell.monthLabel}
-                        </div>
-                        <div
-                          title={tip}
-                          className={[
-                            "flex h-[4.25rem] flex-col overflow-hidden rounded-xl border text-[10px] font-semibold transition-all",
-                            cell.isActive
-                              ? "border-emerald-900/50 bg-slate-950/85 text-slate-100 shadow-inner shadow-black/20"
-                              : "border-slate-800 bg-slate-900/40 text-slate-600",
-                            cell.isCurrent ? "ring-2 ring-emerald-400/75 ring-offset-1 ring-offset-slate-950" : "",
-                          ].join(" ")}
-                        >
-                          <div className="flex min-h-0 flex-1 items-center justify-center px-0.5 text-center leading-tight">
-                            {cell.shortLabel}
-                          </div>
-                          {cell.isActive && cell.climaDisponivel ? (
-                            <div className="mt-auto flex w-full flex-col gap-px border-t border-slate-800/90 bg-black/25 pt-px">
-                              <div
-                                className={`h-1.5 w-full ${climaTempBarClass(cell.tempVs)}`}
-                                title={`Temperatura vs média: ${cell.tempVs ?? "—"}`}
-                              />
-                              <div
-                                className={`h-1.5 w-full ${climaPrecipBarClass(cell.precipVs)}`}
-                                title={`Precipitação vs média: ${cell.precipVs ?? "—"}`}
-                              />
-                            </div>
-                          ) : null}
-                          {cell.isActive && !cell.climaDisponivel ? (
-                            <div className="border-t border-slate-800/80 py-0.5 text-center text-[8px] font-normal text-slate-500">
-                              sem série
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-slate-400">
-                  <span className="rounded-full border border-slate-700 bg-slate-900/60 px-2.5 py-1">
-                    Meses com estágio CONAB: {fenologiaPayload?.janela_fase?.mes_inicio ?? "—"} →{" "}
-                    {fenologiaPayload?.janela_fase?.mes_fim ?? "—"}
-                  </span>
-                  <span className="rounded-full border border-slate-700 bg-slate-900/60 px-2.5 py-1">
-                    Mês de referência: {fenologiaPayload?.mes_referencia ?? "—"}
-                  </span>
-                  <span className="rounded-full border border-slate-700 bg-slate-900/60 px-2.5 py-1">
-                    Fase: {formatPhaseLabel(fenologiaPayload?.fase_atual)}
-                  </span>
-                  {fenologiaPayload?.codigo_conab_mes ? (
-                    <span className="rounded-full border border-slate-700 bg-slate-900/60 px-2.5 py-1">
-                      Código mês: {fenologiaPayload.codigo_conab_mes}
-                    </span>
-                  ) : null}
-                  {fenologiaPayload?.mesorregiao_referencia ? (
-                    <span
-                      className="max-w-full rounded-full border border-slate-700 bg-slate-900/60 px-2.5 py-1"
-                      title={fenologiaPayload.mesorregiao_referencia}
-                    >
-                      Mesorregião: {fenologiaPayload.mesorregiao_referencia}
-                    </span>
-                  ) : null}
-                </div>
-              </div>
+          <div className="mt-4 flex flex-wrap gap-4">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-sm bg-emerald-50 border border-emerald-300" />
+              <span className="text-[10px] text-brand-stone-600 uppercase font-bold">Fase Ativa</span>
             </div>
-
-            <div className="xl:col-span-7">
-              <div className="text-xs uppercase tracking-wide text-slate-400">
-                Leitura fenológica atual
-              </div>
-
-              {fenologiaPayload ? (
-                <div className={`mt-2 rounded-2xl border ${FENOLOGIA_PANEL_TONE.border} bg-slate-950/45 p-4`}>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-                      <div className="text-xs text-slate-400">Cultura</div>
-                      <div className="mt-1 text-sm font-semibold text-white">
-                        {(fenologiaPayload.cultura ?? selectedCulture) || "—"}
-                      </div>
-                    </div>
-
-                    <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-                      <div className="text-xs text-slate-400">Fase (mês de referência)</div>
-                      <div className="mt-1 text-sm font-semibold text-white">
-                        {formatPhaseLabel(fenologiaPayload.fase_atual)}
-                      </div>
-                    </div>
-
-                    <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-                      <div className="text-xs text-slate-400">Código CONAB (mês ref.)</div>
-                      <div className="mt-1 text-sm font-semibold text-white">
-                        {fenologiaPayload.codigo_conab_mes ?? "—"}
-                      </div>
-                    </div>
-                  </div>
-
-                  {fenologiaPayload.clima_metodologia ? (
-                    <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
-                      {fenologiaPayload.clima_metodologia}
-                    </p>
-                  ) : null}
-
-                  <div className="mt-3 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-                    <div className="text-xs uppercase tracking-wide text-slate-400">
-                      Métricas recentes (município)
-                    </div>
-                    <div className="mt-2 space-y-2 text-sm text-slate-200">
-                      <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-800/55 px-3 py-2">
-                        <span>Anomalia precip. (30d vs média)</span>
-                        <span>
-                          {formatNumber(
-                            latestMetrics?.precip_anomalia_pct_30d ?? latestMetrics?.precip_anomalia_30d,
-                            1
-                          )}
-                          %
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-800/55 px-3 py-2">
-                        <span>Anomalia temp. (dia vs média do mês)</span>
-                        <span>
-                          {formatNumber(
-                            latestMetrics?.temp_anomalia_same_month ?? latestMetrics?.temp_anomalia_30d,
-                            2
-                          )}
-                          °C
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-800/55 px-3 py-2">
-                        <span>IIS usado</span>
-                        <span>{formatNumber(latestMetrics?.iis_valor ?? selectedIisValue, 0)}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="mt-2 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-sm text-slate-400">
-                  Selecione uma cultura de referência para ativar a leitura fenológica no diagnóstico.
-                </div>
-              )}
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-1 rounded-full bg-orange-500" />
+              <span className="text-[10px] text-brand-stone-600 uppercase font-bold">Temp. Acima</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-1 rounded-full bg-cyan-500" />
+              <span className="text-[10px] text-brand-stone-600 uppercase font-bold">Precip. Acima</span>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="mb-4 grid grid-cols-1 gap-4 xl:grid-cols-12">
-        <div className="xl:col-span-8 rounded-2xl border border-slate-800 bg-slate-800/70 p-4">
-          <div className="mb-3 flex items-center justify-between gap-3">
+      {/* IIS History Section */}
+      <div className="grid grid-cols-1 md:grid-cols-12 border-b border-brand-stone-300">
+        <div className="col-span-1 md:col-span-8 p-8 border-r border-brand-stone-300">
+          <div className="mb-8 flex items-end justify-between">
             <div>
-              <div className="text-sm font-medium text-white">
-                IIS histórico — {selectedWindowLabel}
-              </div>
-              <div className="text-xs text-slate-400">
-                Faixa histórica, média e linha do ano mais recente ({iisGeoCurrentYear ?? "—"}).
-              </div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-brand-stone-600 mb-1 block">Índice Integrado de Seca</span>
+              <h3 className="text-2xl font-bold tracking-tighter text-brand-dark">Histórico IIS — {selectedWindowLabel}</h3>
             </div>
-            <div className="rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1 text-xs text-slate-300">
-              {iisAvailabilityText}
-            </div>
+            <span className="text-[9px] font-mono text-brand-stone-400">{iisAvailabilityText}</span>
           </div>
-
-          {loadingIis ? (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 text-sm text-slate-400">
-              Carregando histórico do IIS...
-            </div>
-          ) : iisGeoData.some((row) => row.histAvg != null || row.current != null) ? (
-            <ResponsiveContainer width="100%" height={300}>
+          <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={iisGeoData}>
-                <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.15} />
-                <XAxis dataKey="monthLabel" />
-                <YAxis
-                  domain={[1, 6]}
-                  tickFormatter={(v) => formatNumber(Number(v), 0)}
-                />
-                <Tooltip
-                  {...chartTooltipStyle()}
-                  formatter={(value, name) => {
-                    const label = String(name);
-                    const mapNames: Record<string, string> = {
-                      histAvg: "Média histórica",
-                      current: `Ano ${iisGeoCurrentYear ?? "atual"}`,
-                      bandRange: "Faixa histórica",
-                    };
-                    if (label === "bandRange") return [value ?? "—", mapNames[label]];
-                    return [formatNumber(Number(value), 2), mapNames[label] ?? label];
-                  }}
-                />
-                <Legend />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                <XAxis dataKey="monthLabel" tick={{ fontSize: 10, fill: "#78716c" }} axisLine={{ stroke: '#d6d3d1' }} tickLine={false} />
+                <YAxis domain={[1, 6]} tick={{ fontSize: 10, fill: "#78716c" }} axisLine={false} tickLine={false} tickFormatter={(v) => formatNumber(v, 1)} />
+                <Tooltip contentStyle={chartTooltipStyle().contentStyle} />
                 <Area
-                  type="monotone"
-                  dataKey="bandBase"
-                  stackId="iis-band"
-                  stroke="none"
-                  fill="transparent"
-                  legendType="none"
-                  isAnimationActive={false}
-                />
-                <Area
-                  type="monotone"
                   dataKey="bandRange"
-                  stackId="iis-band"
+                  fill={COLOR_FAIXA_HISTORICA_FILL}
+                  fillOpacity={OPACIDADE_FAIXA_HISTORICA}
                   stroke="none"
-                  fill="#cbd5e1"
-                  fillOpacity={0.18}
-                  name="Faixa histórica"
-                  isAnimationActive={false}
+                  name="Faixa Histórica"
                 />
                 <Line
-                  type="monotone"
                   dataKey="histAvg"
-                  name="Média histórica"
-                  stroke="#e5e7eb"
-                  strokeWidth={2}
+                  stroke={COLOR_MEDIA_STROKE}
+                  strokeOpacity={STROKE_OPACITY_MEDIA}
+                  strokeWidth={STROKE_WIDTH_MEDIA}
+                  strokeDasharray={STROKE_MEDIA_DASHARRAY}
+                  strokeLinecap="round"
                   dot={false}
-                  isAnimationActive={false}
+                  name="Média"
                 />
-                <Line
-                  type="monotone"
-                  dataKey="current"
-                  name={`Ano ${iisGeoCurrentYear ?? "atual"}`}
-                  stroke={selectedWindowColor}
-                  strokeWidth={2.6}
-                  dot={false}
-                  connectNulls={false}
-                  isAnimationActive={false}
-                />
+                <Line dataKey="current" stroke={selectedWindowColor} strokeWidth={3} dot={false} name="Ano Atual" />
               </AreaChart>
             </ResponsiveContainer>
-          ) : (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 text-sm text-slate-400">
-              O endpoint histórico do IIS ainda não retornou série suficiente para este município.
-            </div>
-          )}
-        </div>
-
-        <div className="xl:col-span-4 rounded-2xl border border-slate-800 bg-slate-800/70 p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <div className="text-sm font-medium text-white">Snapshot do IIS</div>
-            <div className="text-xs text-slate-400">
-              janela ativa: {selectedWindowLabel}
-            </div>
           </div>
-
-          {iisSnapshot && iisBars.some((d) => d.value != null) ? (
-            <>
-              <ResponsiveContainer width="100%" height={190}>
-                <BarChart data={iisBars}>
-                  <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.15} />
-                  <XAxis dataKey="label" />
-                  <YAxis
-                    domain={[1, 6]}
-                    tickFormatter={(v) => formatNumber(Number(v), 0)}
-                  />
-                  <Tooltip
-                    {...chartTooltipStyle()}
-                    formatter={(v) => formatNumber(Number(v), 0)}
-                  />
-                  <Bar dataKey="value" radius={[8, 8, 0, 0]} isAnimationActive={false}>
-                    {iisBars.map((entry, index) => (
-                      <Cell key={`iis-cell-${index}`} fill={entry.fill} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-
-              <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-900/60 p-3">
-                <div className="text-xs uppercase tracking-wide text-slate-400">
-                  Leitura destacada
-                </div>
-                <div className="mt-2 text-2xl font-semibold text-white">
-                  {formatNumber(selectedIisValue, 0)}
-                </div>
-                <div className="text-sm text-slate-300">
-                  {getIisLabel(selectedIisValue)} · {selectedWindowLabel}
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 text-sm text-slate-400">
-              Sem snapshot do IIS para a seleção atual.
-            </div>
-          )}
         </div>
-      </div>
-
-      <div className="mb-4 rounded-2xl border border-slate-800 bg-slate-800/70 p-4">
-        <div className="mb-3 text-sm font-medium text-white">
-          IIS — comparação dos últimos anos ({selectedWindowLabel})
-        </div>
-        <ResponsiveContainer width="100%" height={260}>
-          <LineChart data={iisRecentWide.data}>
-            <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.15} />
-            <XAxis dataKey="monthLabel" />
-            <YAxis
-              domain={[1, 6]}
-              tickFormatter={(v) => formatNumber(Number(v), 0)}
-            />
-            <Tooltip
-              {...chartTooltipStyle()}
-              formatter={(v) => formatNumber(Number(v), 0)}
-            />
-            <Legend />
-            {iisRecentWide.years.map((year, idx) => (
-              <Line
-                key={year}
-                type="monotone"
-                dataKey={String(year)}
-                name={String(year)}
-                stroke={makeYearColor(idx)}
-                strokeWidth={year === iisGeoCurrentYear ? 2.7 : 1.8}
-                dot={false}
-                connectNulls={false}
-                isAnimationActive={false}
-              />
-            ))}
-          </LineChart>
-        </ResponsiveContainer>
-        <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-900/60 p-3 text-sm text-slate-300">
-          O IIS de 1 mês possui histórico mais curto do que 3 e 6 meses. O gráfico respeita isso com lacunas reais, sem inventar zeros.
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-6 text-sm text-slate-400">
-          Carregando painel agroclimático...
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-4">
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-            <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4">
-              <div className="mb-3 text-sm font-medium text-white">
-                Temperatura média mensal — faixa histórica, média e ano atual
-              </div>
-              <ResponsiveContainer width="100%" height={280}>
-                <AreaChart data={tempMeanEnvelope.data}>
-                  <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.15} />
-                  <XAxis dataKey="monthLabel" />
-                  <YAxis
-                    width={72}
-                    domain={tempMeanDomain}
-                    allowDataOverflow={true}
-                    tickFormatter={(v) => `${formatNumber(Number(v), 1)}°C`}
-                  />
-                  <Tooltip
-                    {...chartTooltipStyle()}
-                    formatter={(value, name) => {
-                      const label = String(name);
-                      const labels: Record<string, string> = {
-                        histAvg: "Média histórica",
-                        current: `Ano ${tempMeanEnvelope.currentYear ?? "atual"}`,
-                        bandRange: "Faixa histórica",
-                      };
-                      if (label === "bandRange") return [value ?? "—", labels[label]];
-                      return [`${formatNumber(Number(value), 2)} °C`, labels[label] ?? label];
-                    }}
-                  />
-                  <Legend />
-                  <Area
-                    type="monotone"
-                    dataKey="bandBase"
-                    stackId="temp-mean-band"
-                    stroke="none"
-                    fill="transparent"
-                    legendType="none"
-                    isAnimationActive={false}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="bandRange"
-                    stackId="temp-mean-band"
-                    stroke="none"
-                    fill="#d1d5db"
-                    fillOpacity={0.18}
-                    name="Faixa histórica"
-                    isAnimationActive={false}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="histAvg"
-                    name="Média histórica"
-                    stroke="#e5e7eb"
-                    strokeWidth={2}
-                    dot={false}
-                    isAnimationActive={false}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="current"
-                    name={`Ano ${tempMeanEnvelope.currentYear ?? "atual"}`}
-                    stroke="#60A5FA"
-                    strokeWidth={2.6}
-                    dot={false}
-                    connectNulls={false}
-                    isAnimationActive={false}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4">
-              <div className="mb-3 text-sm font-medium text-white">
-                Temperatura mínima mensal — faixa histórica, média e ano atual
-              </div>
-              <ResponsiveContainer width="100%" height={280}>
-                <AreaChart data={tempMinEnvelope.data}>
-                  <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.15} />
-                  <XAxis dataKey="monthLabel" />
-                  <YAxis
-                    width={72}
-                    domain={tempMinDomain}
-                    allowDataOverflow={true}
-                    tickFormatter={(v) => `${formatNumber(Number(v), 1)}°C`}
-                  />
-                  <Tooltip
-                    {...chartTooltipStyle()}
-                    formatter={(value, name) => {
-                      const label = String(name);
-                      const labels: Record<string, string> = {
-                        histAvg: "Média histórica",
-                        current: `Ano ${tempMinEnvelope.currentYear ?? "atual"}`,
-                        bandRange: "Faixa histórica",
-                      };
-                      if (label === "bandRange") return [value ?? "—", labels[label]];
-                      return [`${formatNumber(Number(value), 2)} °C`, labels[label] ?? label];
-                    }}
-                  />
-                  <Legend />
-                  <Area
-                    type="monotone"
-                    dataKey="bandBase"
-                    stackId="temp-min-band"
-                    stroke="none"
-                    fill="transparent"
-                    legendType="none"
-                    isAnimationActive={false}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="bandRange"
-                    stackId="temp-min-band"
-                    stroke="none"
-                    fill="#d1d5db"
-                    fillOpacity={0.18}
-                    name="Faixa histórica"
-                    isAnimationActive={false}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="histAvg"
-                    name="Média histórica"
-                    stroke="#e5e7eb"
-                    strokeWidth={2}
-                    dot={false}
-                    isAnimationActive={false}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="current"
-                    name={`Ano ${tempMinEnvelope.currentYear ?? "atual"}`}
-                    stroke="#A78BFA"
-                    strokeWidth={2.6}
-                    dot={false}
-                    connectNulls={false}
-                    isAnimationActive={false}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4">
-              <div className="mb-3 text-sm font-medium text-white">
-                Temperatura máxima mensal — faixa histórica, média e ano atual
-              </div>
-              <ResponsiveContainer width="100%" height={280}>
-                <AreaChart data={tempMaxEnvelope.data}>
-                  <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.15} />
-                  <XAxis dataKey="monthLabel" />
-                  <YAxis
-                    width={72}
-                    domain={tempMaxDomain}
-                    allowDataOverflow={true}
-                    tickFormatter={(v) => `${formatNumber(Number(v), 1)}°C`}
-                  />
-                  <Tooltip
-                    {...chartTooltipStyle()}
-                    formatter={(value, name) => {
-                      const label = String(name);
-                      const labels: Record<string, string> = {
-                        histAvg: "Média histórica",
-                        current: `Ano ${tempMaxEnvelope.currentYear ?? "atual"}`,
-                        bandRange: "Faixa histórica",
-                      };
-                      if (label === "bandRange") return [value ?? "—", labels[label]];
-                      return [`${formatNumber(Number(value), 2)} °C`, labels[label] ?? label];
-                    }}
-                  />
-                  <Legend />
-                  <Area
-                    type="monotone"
-                    dataKey="bandBase"
-                    stackId="temp-max-band"
-                    stroke="none"
-                    fill="transparent"
-                    legendType="none"
-                    isAnimationActive={false}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="bandRange"
-                    stackId="temp-max-band"
-                    stroke="none"
-                    fill="#d1d5db"
-                    fillOpacity={0.18}
-                    name="Faixa histórica"
-                    isAnimationActive={false}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="histAvg"
-                    name="Média histórica"
-                    stroke="#e5e7eb"
-                    strokeWidth={2}
-                    dot={false}
-                    isAnimationActive={false}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="current"
-                    name={`Ano ${tempMaxEnvelope.currentYear ?? "atual"}`}
-                    stroke="#22C55E"
-                    strokeWidth={2.6}
-                    dot={false}
-                    connectNulls={false}
-                    isAnimationActive={false}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4">
-              <div className="mb-3 text-sm font-medium text-white">
-                Precipitação mensal por ano
-              </div>
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={precipWide.data}>
-                  <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.15} />
-                  <XAxis dataKey="monthLabel" />
-                  <YAxis
-                    width={84}
-                    domain={precipMonthlyDomain}
-                    tickFormatter={(v) => `${formatNumber(Number(v), 0)}mm`}
-                  />
-                  <Tooltip
-                    {...chartTooltipStyle()}
-                    formatter={(v) => `${formatNumber(Number(v), 2)} mm`}
-                  />
-                  <Legend />
-                  {precipWide.years.map((year, idx) => (
-                    <Bar
-                      key={year}
-                      dataKey={String(year)}
-                      name={String(year)}
-                      fill={makeYearColor(idx)}
-                      radius={[4, 4, 0, 0]}
-                    />
+        <div className="col-span-1 md:col-span-4 p-8 bg-brand-bg/10">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-brand-stone-600 mb-4 block">Snapshot IIS</span>
+          <div className="h-[200px] w-full mb-6">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={iisBars}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#78716c" }} axisLine={{ stroke: '#d6d3d1' }} tickLine={false} />
+                <YAxis domain={[1, 6]} hide />
+                <Tooltip contentStyle={chartTooltipStyle().contentStyle} />
+                <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                  {iisBars.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.fill} />
                   ))}
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4">
-            <div className="mb-3 text-sm font-medium text-white">
-              Precipitação acumulada — média acumulada x ano atual
-            </div>
-            <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={precipAccumComparison.data}>
-                <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.15} />
-                <XAxis dataKey="monthLabel" />
-                <YAxis
-                  width={84}
-                  domain={precipAccumDomain}
-                  tickFormatter={(v) => `${formatNumber(Number(v), 0)}mm`}
-                />
-                <Tooltip
-                  {...chartTooltipStyle()}
-                  formatter={(value, name) => {
-                    const label = String(name);
-                    const labels: Record<string, string> = {
-                      mean: "Média acumulada",
-                      current: `Ano ${precipAccumComparison.currentYear ?? "atual"}`,
-                      posGap: "Acima da média",
-                      negGap: "Abaixo da média",
-                    };
-                    return [`${formatNumber(Number(value), 2)} mm`, labels[label] ?? label];
-                  }}
-                />
-                <Legend />
-
-                <Area
-                  type="monotone"
-                  dataKey="posBase"
-                  stackId="pos"
-                  stroke="none"
-                  fill="transparent"
-                  legendType="none"
-                  isAnimationActive={false}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="posGap"
-                  stackId="pos"
-                  stroke="none"
-                  fill="#22C55E"
-                  fillOpacity={0.22}
-                  name="Acima da média"
-                  isAnimationActive={false}
-                />
-
-                <Area
-                  type="monotone"
-                  dataKey="negBase"
-                  stackId="neg"
-                  stroke="none"
-                  fill="transparent"
-                  legendType="none"
-                  isAnimationActive={false}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="negGap"
-                  stackId="neg"
-                  stroke="none"
-                  fill="#EF4444"
-                  fillOpacity={0.22}
-                  name="Abaixo da média"
-                  isAnimationActive={false}
-                />
-
-                <Line
-                  type="monotone"
-                  dataKey="mean"
-                  name="Média acumulada"
-                  stroke="#e5e7eb"
-                  strokeWidth={2}
-                  dot={false}
-                  connectNulls={false}
-                  isAnimationActive={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="current"
-                  name={`Ano ${precipAccumComparison.currentYear ?? "atual"}`}
-                  stroke="#60A5FA"
-                  strokeWidth={2.8}
-                  dot={false}
-                  connectNulls={false}
-                  isAnimationActive={false}
-                />
-              </AreaChart>
+                </Bar>
+              </BarChart>
             </ResponsiveContainer>
-            <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-800/70 p-3 text-sm leading-6 text-slate-300">
-              {precipInsight}
-            </div>
+          </div>
+          <div className="p-4 rounded-xl border border-brand-stone-300 bg-white shadow-sm">
+            <span className="text-[9px] font-bold uppercase text-brand-stone-600 block mb-1">Leitura Destacada</span>
+            <span className="text-3xl font-bold text-brand-dark">{formatNumber(selectedIisValue, 1)}</span>
+            <span className="text-[10px] font-bold uppercase text-brand-stone-400 block mt-1">{getIisLabel(selectedIisValue)}</span>
           </div>
         </div>
-      )}
+      </div>
+
+      {/* Climate Envelopes */}
+      <div className="grid grid-cols-1 md:grid-cols-12 border-b border-brand-stone-300">
+        <div className="col-span-1 md:col-span-4 p-8 border-r border-brand-stone-300">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-brand-stone-600 mb-4 block">Temperatura</span>
+          <h3 className="text-xl font-bold tracking-tighter text-brand-dark mb-6">Envelope Térmico Médio</h3>
+          <div className="h-[250px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={tempMeanEnvelope.data}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                <XAxis dataKey="monthLabel" tick={{ fontSize: 10, fill: "#78716c" }} axisLine={{ stroke: '#d6d3d1' }} tickLine={false} />
+                <YAxis
+                  domain={tempMeanDomain}
+                  tick={{ fontSize: 10, fill: "#78716c" }}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={(v) => formatNumber(v, 1)}
+                  label={yAxisLabelTemp}
+                />
+                <Tooltip contentStyle={chartTooltipStyle().contentStyle} formatter={tooltipFormatterTemp} />
+                <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} formatter={(value) => <span className="text-brand-stone-700">{value}</span>} />
+                <Area
+                  dataKey="bandRange"
+                  fill={COLOR_FAIXA_HISTORICA_FILL}
+                  fillOpacity={OPACIDADE_FAIXA_HISTORICA}
+                  stroke="none"
+                  name={SERIE_FAIXA_HISTORICA}
+                />
+                <Line
+                  dataKey="histAvg"
+                  stroke={COLOR_MEDIA_STROKE}
+                  strokeOpacity={STROKE_OPACITY_MEDIA}
+                  strokeWidth={STROKE_WIDTH_MEDIA}
+                  strokeDasharray={STROKE_MEDIA_DASHARRAY}
+                  strokeLinecap="round"
+                  dot={false}
+                  name={SERIE_MEDIA}
+                />
+                <Line dataKey="current" stroke="#0071B9" strokeWidth={2.5} dot={false} name={SERIE_ANO_ATUAL} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+        <div className="col-span-1 md:col-span-4 p-8 border-r border-brand-stone-300">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-brand-stone-600 mb-4 block">Temperatura</span>
+          <h3 className="text-xl font-bold tracking-tighter text-brand-dark mb-6">Mínimas Históricas</h3>
+          <div className="h-[250px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={tempMinEnvelope.data}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                <XAxis dataKey="monthLabel" tick={{ fontSize: 10, fill: "#78716c" }} axisLine={{ stroke: '#d6d3d1' }} tickLine={false} />
+                <YAxis
+                  domain={tempMinDomain}
+                  tick={{ fontSize: 10, fill: "#78716c" }}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={(v) => formatNumber(v, 1)}
+                  label={yAxisLabelTemp}
+                />
+                <Tooltip contentStyle={chartTooltipStyle().contentStyle} formatter={tooltipFormatterTemp} />
+                <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} formatter={(value) => <span className="text-brand-stone-700">{value}</span>} />
+                <Area
+                  dataKey="bandRange"
+                  fill={COLOR_FAIXA_HISTORICA_FILL}
+                  fillOpacity={OPACIDADE_FAIXA_HISTORICA}
+                  stroke="none"
+                  name={SERIE_FAIXA_HISTORICA}
+                />
+                <Line
+                  dataKey="histAvg"
+                  stroke={COLOR_MEDIA_STROKE}
+                  strokeOpacity={STROKE_OPACITY_MEDIA}
+                  strokeWidth={STROKE_WIDTH_MEDIA}
+                  strokeDasharray={STROKE_MEDIA_DASHARRAY}
+                  strokeLinecap="round"
+                  dot={false}
+                  name={SERIE_MEDIA}
+                />
+                <Line dataKey="current" stroke="#38BDF8" strokeWidth={2.5} dot={false} name={SERIE_ANO_ATUAL} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+        <div className="col-span-1 md:col-span-4 p-8">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-brand-stone-600 mb-4 block">Temperatura</span>
+          <h3 className="text-xl font-bold tracking-tighter text-brand-dark mb-6">Máximas Históricas</h3>
+          <div className="h-[250px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={tempMaxEnvelope.data}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                <XAxis dataKey="monthLabel" tick={{ fontSize: 10, fill: "#78716c" }} axisLine={{ stroke: '#d6d3d1' }} tickLine={false} />
+                <YAxis
+                  domain={tempMaxDomain}
+                  tick={{ fontSize: 10, fill: "#78716c" }}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={(v) => formatNumber(v, 1)}
+                  label={yAxisLabelTemp}
+                />
+                <Tooltip contentStyle={chartTooltipStyle().contentStyle} formatter={tooltipFormatterTemp} />
+                <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} formatter={(value) => <span className="text-brand-stone-700">{value}</span>} />
+                <Area
+                  dataKey="bandRange"
+                  fill={COLOR_FAIXA_HISTORICA_FILL}
+                  fillOpacity={OPACIDADE_FAIXA_HISTORICA}
+                  stroke="none"
+                  name={SERIE_FAIXA_HISTORICA}
+                />
+                <Line
+                  dataKey="histAvg"
+                  stroke={COLOR_MEDIA_STROKE}
+                  strokeOpacity={STROKE_OPACITY_MEDIA}
+                  strokeWidth={STROKE_WIDTH_MEDIA}
+                  strokeDasharray={STROKE_MEDIA_DASHARRAY}
+                  strokeLinecap="round"
+                  dot={false}
+                  name={SERIE_MEDIA}
+                />
+                <Line dataKey="current" stroke="#F43F5E" strokeWidth={2.5} dot={false} name={SERIE_ANO_ATUAL} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-12 border-b border-brand-stone-300">
+        <div className="col-span-1 md:col-span-12 p-8">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-brand-stone-600 mb-4 block">Precipitação</span>
+          <h3 className="text-xl font-bold tracking-tighter text-brand-dark mb-6">Acumulado anual × média de referência</h3>
+          <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={precipAccumComparison.data}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                <XAxis dataKey="monthLabel" tick={{ fontSize: 10, fill: "#78716c" }} axisLine={{ stroke: '#d6d3d1' }} tickLine={false} />
+                <YAxis
+                  domain={precipAccumDomain}
+                  tick={{ fontSize: 10, fill: "#78716c" }}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={(v) => formatNumber(v, 0)}
+                  label={yAxisLabelMm}
+                />
+                <Tooltip contentStyle={chartTooltipStyle().contentStyle} formatter={tooltipFormatterPrecipMm} />
+                <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} formatter={(value) => <span className="text-brand-stone-700">{value}</span>} />
+                <Line
+                  dataKey="mean"
+                  stroke={COLOR_MEDIA_STROKE}
+                  strokeOpacity={STROKE_OPACITY_MEDIA}
+                  strokeWidth={STROKE_WIDTH_MEDIA}
+                  strokeDasharray={STROKE_MEDIA_DASHARRAY}
+                  strokeLinecap="round"
+                  dot={false}
+                  name={SERIE_MEDIA_REF_PRECIP}
+                />
+                <Line dataKey="current" stroke="#0071B9" strokeWidth={3} dot={false} name={SERIE_ACUMULADO_ANO} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

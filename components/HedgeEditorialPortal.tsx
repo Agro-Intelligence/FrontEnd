@@ -3,12 +3,14 @@
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import AgroProductionPanel from "@/components/AgroProductionPanel";
 import {
   ResponsiveContainer,
   LineChart,
   Line,
   AreaChart,
   Area,
+  ComposedChart,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -17,22 +19,12 @@ import {
   BarChart,
   Bar,
 } from "recharts";
-const AgroProductionPanel = dynamic(
-  () => import("@/components/AgroProductionPanel"),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-sm text-slate-300">
-        Carregando painel de produção...
-      </div>
-    ),
-  }
-);
 
 const AgroClimaPanel = dynamic(() => import("@/components/AgroClimaPanel"), {
   ssr: false,
   loading: () => (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-sm text-slate-300">
+    <div className="rounded-xl border border-stone-300 bg-white p-4 text-xs text-brand-stone-600 shadow-sm flex items-center gap-3">
+      <div className="w-4 h-4 border-2 border-brand-blue border-t-transparent rounded-full animate-spin"></div>
       Carregando painel agroclimático...
     </div>
   ),
@@ -43,7 +35,8 @@ const MacroCreditoAgroPanel = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-sm text-slate-300">
+      <div className="rounded-xl border border-stone-300 bg-white p-4 text-xs text-brand-stone-600 shadow-sm flex items-center gap-3">
+        <div className="w-4 h-4 border-2 border-brand-blue border-t-transparent rounded-full animate-spin"></div>
         Carregando painel macro & crédito...
       </div>
     ),
@@ -53,6 +46,19 @@ const MacroCreditoAgroPanel = dynamic(
 const MunicipalRiskMap = dynamic(
   () => import("@/components/MunicipalRiskMap"),
   { ssr: false }
+);
+
+const ForwardCurvesPanel = dynamic(
+  () => import("@/components/ForwardCurvesPanel"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="p-8 text-xs text-brand-stone-600 flex items-center gap-3">
+        <div className="w-4 h-4 border-2 border-brand-blue border-t-transparent rounded-full animate-spin"></div>
+        Carregando curvas a termo...
+      </div>
+    ),
+  }
 );
 
 const API_BASE_URL =
@@ -66,10 +72,10 @@ export type PortalTab = "mercado" | "macro" | "mapa" | "producao";
 
 type HedgeEditorialPortalProps = {
   onGoHome?: () => void;
-  /** Roteiro numerado para reuniões e onboarding; mesmo acesso para todos; não altera dados. */
-  presentationMode?: boolean;
   /** Aba inicial (ex.: URL ?tab=macro). */
   initialTab?: PortalTab;
+  /** Rota `/apresentacao`: mesmo portal com aba inicial via query. */
+  presentationMode?: boolean;
 };
 
 type AssetItem = {
@@ -121,6 +127,10 @@ type ForecastResponse = {
   };
   forecast: {
     values: number[];
+    conf_20_upper?: number[];
+    conf_20_lower?: number[];
+    conf_30_upper?: number[];
+    conf_30_lower?: number[];
   };
   metrics: {
     history_last: number;
@@ -215,6 +225,31 @@ type SoySpreadSeriesResponse = {
   items: SoySpreadSeriesItem[];
 };
 
+type ForwardCurveItem = {
+  symbol: string;
+  asset_name: string;
+  reference_date: string;
+  maturity_code: string;
+  maturity_date: string;
+  days_to_expiry: number;
+  settlement: number;
+  spot?: number | null;
+  price_basis?: string | null;
+  premium_vs_spot?: number | null;
+  premium_pct_vs_spot?: number | null;
+  annualized_basis?: number | null;
+};
+
+type ForwardCurveResponse = {
+  symbol: string;
+  asset_name: string;
+  reference_date: string | null;
+  points_count: number;
+  has_spot: boolean;
+  curve_shape_label?: string | null;
+  items: ForwardCurveItem[];
+};
+
 type CepeaUpdateStatusResponse = {
   started_at?: string | null;
   updated_at?: string | null;
@@ -280,6 +315,17 @@ type ForecastPoint = {
   label: string;
   history: number | null;
   forecast: number | null;
+  /**
+   * Faixa nativa Recharts (isRange): [inferior, superior]. Evita Area empilhada a partir de 0
+   * (artefato de linha vertical até o eixo).
+   */
+  ic30?: [number, number] | null;
+  ic20?: [number, number] | null;
+  /** Limites explícitos para linhas tracejadas e tooltip. */
+  ci20_low?: number | null;
+  ci20_high?: number | null;
+  ci30_low?: number | null;
+  ci30_high?: number | null;
 };
 
 type SpreadChartPoint = {
@@ -343,36 +389,36 @@ function formatStrategyName(strategy?: string): string {
 function getSignalBadge(signal?: string): string {
   switch (signal) {
     case "bullish":
-      return "bg-emerald-950/70 text-emerald-300 border-emerald-800";
+      return "bg-emerald-50 text-emerald-700";
     case "bearish":
-      return "bg-red-950/70 text-red-300 border-red-800";
+      return "bg-red-50 text-red-700";
     case "neutral_range":
     default:
-      return "bg-amber-950/70 text-amber-300 border-amber-800";
+      return "bg-amber-50 text-amber-700";
   }
 }
 
 function getSentimentBadge(label?: string): string {
   switch (label) {
     case "bullish":
-      return "bg-emerald-950/70 text-emerald-300 border-emerald-800";
+      return "bg-emerald-50 text-emerald-700";
     case "bearish":
-      return "bg-red-950/70 text-red-300 border-red-800";
+      return "bg-red-50 text-red-700";
     default:
-      return "bg-amber-950/70 text-amber-300 border-amber-800";
+      return "bg-amber-50 text-amber-700";
   }
 }
 
 function getUpdateStatusBadge(status?: string | null): string {
   switch (status) {
     case "ok":
-      return "bg-emerald-950/70 text-emerald-300 border-emerald-800";
+      return "bg-emerald-50 text-emerald-700 border-emerald-200";
     case "error":
-      return "bg-red-950/70 text-red-300 border-red-800";
+      return "bg-red-50 text-red-700 border-red-200";
     case "never_run":
-      return "bg-amber-950/70 text-amber-300 border-amber-800";
+      return "bg-amber-50 text-amber-700 border-amber-200";
     default:
-      return "bg-slate-800/80 text-slate-300 border-slate-700";
+      return "bg-stone-100/50 text-brand-stone-600 border-stone-300";
   }
 }
 
@@ -393,8 +439,8 @@ function formatUpdateStatusLabel(status?: string | null): string {
 
 function getB3StatusBadge(hasData: boolean): string {
   return hasData
-    ? "bg-sky-950/70 text-sky-300 border-sky-800"
-    : "bg-slate-800/80 text-slate-300 border-slate-700";
+    ? "bg-sky-50 text-sky-700 border-sky-200"
+    : "bg-stone-100/50 text-brand-stone-600 border-stone-300";
 }
 
 function getB3StatusLabel(hasData: boolean): string {
@@ -404,11 +450,11 @@ function getB3StatusLabel(hasData: boolean): string {
 function getMacroRegimeBadgeClass(badge?: string): string {
   switch (badge) {
     case "restrictive":
-      return "bg-red-950/70 text-red-300 border-red-800";
+      return "bg-red-50 text-red-700";
     case "pro_export":
-      return "bg-emerald-950/70 text-emerald-300 border-emerald-800";
+      return "bg-emerald-50 text-emerald-700";
     default:
-      return "bg-amber-950/70 text-amber-300 border-amber-800";
+      return "bg-amber-50 text-amber-700";
   }
 }
 
@@ -435,6 +481,90 @@ function getAssetDisplayName(symbol: string, fallback?: string): string {
   }
 
   return map[cleanSymbol] || cleanSymbol;
+}
+
+/** Referência B3: moeda, unidade de cotação e tamanho típico do contrato (painel). */
+type AssetPriceSpec = {
+  currencyCode: string;
+  currencyLabel: string;
+  quoteKind: string;
+  quoteDetail: string;
+  contractLot: string;
+  exchange: string;
+  /** Texto curto para eixos e valores */
+  axisShort: string;
+};
+
+const DEFAULT_PRICE_SPEC: AssetPriceSpec = {
+  currencyCode: "BRL",
+  currencyLabel: "Real (BRL)",
+  quoteKind: "Cotação",
+  quoteDetail: "Unidade conforme contrato B3",
+  contractLot: "—",
+  exchange: "B3",
+  axisShort: "",
+};
+
+const ASSET_PRICE_SPECS: Record<string, AssetPriceSpec> = {
+  BGI: {
+    currencyCode: "BRL",
+    currencyLabel: "Real (BRL)",
+    quoteKind: "R$ por arroba",
+    quoteDetail: "1 @ = 15 kg de carcaça",
+    contractLot: "330 arrobas",
+    exchange: "B3",
+    axisShort: "R$/@",
+  },
+  CCM: {
+    currencyCode: "BRL",
+    currencyLabel: "Real (BRL)",
+    quoteKind: "R$ por saca",
+    quoteDetail: "Saca de 60 kg",
+    contractLot: "450 sacas",
+    exchange: "B3",
+    axisShort: "R$/saca 60 kg",
+  },
+  SJC: {
+    currencyCode: "USD",
+    currencyLabel: "Dólar (USD)",
+    quoteKind: "US$ por saca",
+    quoteDetail: "Saca de 60 kg",
+    contractLot: "450 sacas",
+    exchange: "B3",
+    axisShort: "US$/saca 60 kg",
+  },
+  ICF: {
+    currencyCode: "USD",
+    currencyLabel: "Dólar (USD)",
+    quoteKind: "US$ por saca",
+    quoteDetail: "Saca de 60 kg (padrão negociação)",
+    contractLot: "100 sacas",
+    exchange: "B3",
+    axisShort: "US$/saca 60 kg",
+  },
+  CNL: {
+    currencyCode: "USD",
+    currencyLabel: "Dólar (USD)",
+    quoteKind: "US$ por saca",
+    quoteDetail: "Saca de 60 kg",
+    contractLot: "100 sacas",
+    exchange: "B3",
+    axisShort: "US$/saca 60 kg",
+  },
+  ETH: {
+    currencyCode: "BRL",
+    currencyLabel: "Real (BRL)",
+    quoteKind: "R$ por m³",
+    quoteDetail: "Etanol hidratado (referência de cotação)",
+    contractLot: "Contrato em m³",
+    exchange: "B3",
+    axisShort: "R$/m³",
+  },
+};
+
+function getAssetPriceSpec(symbol?: string | null): AssetPriceSpec {
+  const s = (symbol || "").trim().toUpperCase();
+  return ASSET_PRICE_SPECS[s] ?? DEFAULT_PRICE_SPEC;
 }
 
 function formatNumber(value?: number | null, digits = 2): string {
@@ -522,7 +652,8 @@ function makeForecastChartData(
   const forecastValues = Array.isArray(forecast.forecast?.values)
     ? forecast.forecast.values
     : [];
-  const horizon = Number(forecast.horizon ?? forecastValues.length ?? 0);
+  /** Índices de IC devem seguir o vetor de projeções (fonte de verdade). */
+  const forecastSteps = forecastValues.length;
 
   const historyTailSize = Math.min(20, historyValues.length);
   const tailStart = Math.max(0, historyValues.length - historyTailSize);
@@ -538,15 +669,39 @@ function makeForecastChartData(
         i === historyValues.length - 1 && Number.isFinite(histValue)
           ? histValue
           : null,
+      ic20: null,
+      ic30: null,
+      ci20_low: null,
+      ci20_high: null,
+      ci30_low: null,
+      ci30_high: null,
     });
   }
 
-  for (let j = 0; j < horizon; j++) {
+  for (let j = 0; j < forecastSteps; j++) {
     const fcstValue = forecastValues[j];
+    const c20u = forecast.forecast.conf_20_upper?.[j];
+    const c20l = forecast.forecast.conf_20_lower?.[j];
+    const c30u = forecast.forecast.conf_30_upper?.[j];
+    const c30l = forecast.forecast.conf_30_lower?.[j];
+
+    const ok20 = Number.isFinite(c20l) && Number.isFinite(c20u);
+    const ok30 = Number.isFinite(c30l) && Number.isFinite(c30u);
+    const v20l = ok20 ? (c20l as number) : null;
+    const v20u = ok20 ? (c20u as number) : null;
+    const v30l = ok30 ? (c30l as number) : null;
+    const v30u = ok30 ? (c30u as number) : null;
+
     data.push({
       label: `F+${j + 1}`,
       history: null,
       forecast: Number.isFinite(fcstValue) ? fcstValue : null,
+      ci20_low: v20l,
+      ci20_high: v20u,
+      ci30_low: v30l,
+      ci30_high: v30u,
+      ic20: ok20 && v20l !== null && v20u !== null ? [v20l, v20u] : null,
+      ic30: ok30 && v30l !== null && v30u !== null ? [v30l, v30u] : null,
     });
   }
 
@@ -556,13 +711,13 @@ function makeForecastChartData(
 function chartTooltipStyle() {
   return {
     contentStyle: {
-      backgroundColor: "#0f172a",
-      border: "1px solid #334155",
-      color: "#f8fafc",
+      backgroundColor: "#ffffff",
+      border: "1px solid #d6d3d1",
+      color: "#1c1917",
       borderRadius: "14px",
-      boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
+      boxShadow: "0 10px 30px rgba(0,0,0,0.1)",
     },
-    labelStyle: { color: "#f8fafc" },
+    labelStyle: { color: "#1c1917", fontWeight: "bold" },
   };
 }
 
@@ -576,7 +731,7 @@ function getSpreadSignal(
   ) {
     return {
       label: "Sem leitura",
-      badge: "bg-slate-800/80 text-slate-300 border-slate-700",
+      badge: "bg-stone-100/50 text-brand-stone-600 border-stone-300",
       text: "Ainda sem leitura confiável do diferencial porto versus interior.",
     };
   }
@@ -584,7 +739,7 @@ function getSpreadSignal(
   if (spreadPct >= 0.06) {
     return {
       label: "Spread elevado",
-      badge: "bg-emerald-950/70 text-emerald-300 border-emerald-800",
+      badge: "bg-emerald-50 text-emerald-700 border-emerald-200",
       text: "Diferencial relativamente amplo entre porto e interior, sugerindo prêmio logístico/exportador mais forte.",
     };
   }
@@ -592,14 +747,14 @@ function getSpreadSignal(
   if (spreadPct >= 0.03) {
     return {
       label: "Spread moderado",
-      badge: "bg-amber-950/70 text-amber-300 border-amber-800",
+      badge: "bg-amber-50 text-amber-700 border-amber-200",
       text: "Diferencial positivo e saudável entre porto e interior, sem sinal de compressão extrema.",
     };
   }
 
   return {
     label: "Spread comprimido",
-    badge: "bg-rose-950/70 text-rose-300 border-rose-800",
+    badge: "bg-red-50 text-red-700 border-red-200",
     text: "Diferencial mais apertado entre porto e interior, sugerindo compressão logística ou menor prêmio exportador.",
   };
 }
@@ -619,7 +774,7 @@ function getBasisClassification(
   ) {
     return {
       label: "Sem leitura",
-      badge: "bg-slate-800/80 text-slate-300 border-slate-700",
+      badge: "bg-stone-100/50 text-brand-stone-600 border-stone-300",
       text: "Ainda não há base suficiente para classificar o basis porto versus interior.",
       desvioPct: null,
     };
@@ -630,7 +785,7 @@ function getBasisClassification(
   if (desvioPct >= 0.08) {
     return {
       label: "Aberto",
-      badge: "bg-emerald-950/70 text-emerald-300 border-emerald-800",
+      badge: "bg-emerald-50 text-emerald-700 border-emerald-200",
       text: "O basis está acima da média móvel de 30 dias, sugerindo abertura do diferencial porto versus interior.",
       desvioPct,
     };
@@ -639,7 +794,7 @@ function getBasisClassification(
   if (desvioPct <= -0.08) {
     return {
       label: "Comprimido",
-      badge: "bg-rose-950/70 text-rose-300 border-rose-800",
+      badge: "bg-red-50 text-red-700 border-red-200",
       text: "O basis está abaixo da média móvel de 30 dias, sinalizando compressão do diferencial porto versus interior.",
       desvioPct,
     };
@@ -647,7 +802,7 @@ function getBasisClassification(
 
   return {
     label: "Normal",
-    badge: "bg-amber-950/70 text-amber-300 border-amber-800",
+    badge: "bg-amber-50 text-amber-700 border-amber-200",
     text: "O basis está próximo da média móvel recente, sem descolamento relevante no diferencial porto versus interior.",
     desvioPct,
   };
@@ -703,24 +858,24 @@ function buildArbitrageSignal(
 
 function getArbitrageBadge(signal: ArbitrageSignal | null): string {
   if (!signal) {
-    return "bg-slate-800/80 text-slate-300 border-slate-700";
+    return "bg-stone-100/50 text-brand-stone-600 border-stone-300";
   }
 
   if (signal.classification === "BARATO") {
-    return "bg-emerald-950/70 text-emerald-300 border-emerald-800";
+    return "bg-emerald-50 text-emerald-700 border-emerald-200";
   }
 
   if (signal.classification === "CARO") {
-    return "bg-red-950/70 text-red-300 border-red-800";
+    return "bg-red-50 text-red-700 border-red-200";
   }
 
-  return "bg-amber-950/70 text-amber-300 border-amber-800";
+  return "bg-amber-50 text-amber-700 border-amber-200";
 }
 
 export default function HedgeEditorialPortal({
   onGoHome,
-  presentationMode = false,
   initialTab = "mercado",
+  presentationMode: _presentationMode,
 }: HedgeEditorialPortalProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -739,6 +894,9 @@ export default function HedgeEditorialPortal({
   const [strategy, setStrategy] = useState<StrategyResponse | null>(null);
   const [backtest, setBacktest] = useState<BacktestResponse | null>(null);
   const [sentiment, setSentiment] = useState<SentimentResponse | null>(null);
+  const [forwardCurve, setForwardCurve] = useState<ForwardCurveResponse | null>(
+    null
+  );
   const [soySpreadLatest, setSoySpreadLatest] =
     useState<SoySpreadLatestResponse | null>(null);
   const [soySpreadSeries, setSoySpreadSeries] =
@@ -824,7 +982,7 @@ export default function HedgeEditorialPortal({
     return data;
   }
 
-  async function fetchForecast(symbol: string, model: string) {
+    async function fetchForecast(symbol: string, model: string) {
     const res = await fetch(`${API_BASE_URL}/forecast/run`, {
       method: "POST",
       headers: {
@@ -849,6 +1007,10 @@ export default function HedgeEditorialPortal({
       },
       forecast: {
         values: Array.isArray(raw?.forecast?.values) ? raw.forecast.values : [],
+        conf_20_upper: Array.isArray(raw?.forecast?.conf_20_upper) ? raw.forecast.conf_20_upper : [],
+        conf_20_lower: Array.isArray(raw?.forecast?.conf_20_lower) ? raw.forecast.conf_20_lower : [],
+        conf_30_upper: Array.isArray(raw?.forecast?.conf_30_upper) ? raw.forecast.conf_30_upper : [],
+        conf_30_lower: Array.isArray(raw?.forecast?.conf_30_lower) ? raw.forecast.conf_30_lower : [],
       },
     };
 
@@ -911,6 +1073,18 @@ export default function HedgeEditorialPortal({
 
     const data: SentimentResponse = await res.json();
     setSentiment(data);
+  }
+
+  async function fetchForwardCurve(symbol: string) {
+    const res = await fetch(`${API_BASE_URL}/forward-curves/${symbol}`, {
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      throw new Error(`Erro ao carregar curva forward para ${symbol}.`);
+    }
+
+    const data: ForwardCurveResponse = await res.json();
+    setForwardCurve(data);
   }
 
   async function fetchSoySpreadLatest() {
@@ -1038,6 +1212,7 @@ export default function HedgeEditorialPortal({
         fetchForecast(symbol, bestModel),
         fetchStrategy(symbol),
         fetchSentiment(symbol),
+        fetchForwardCurve(symbol),
       ]);
 
       try {
@@ -1101,6 +1276,8 @@ export default function HedgeEditorialPortal({
       ? continuous?.open_interest
       : [];
 
+    console.log("Continuous data received:", { datesCount: dates.length, settlementsCount: settlements.length });
+
     return dates
       .map((date, index) => ({
         date,
@@ -1151,6 +1328,11 @@ export default function HedgeEditorialPortal({
     };
   }, [seriesData]);
 
+  const mercadoPriceSpec = useMemo(
+    () => getAssetPriceSpec(selectedSymbol),
+    [selectedSymbol]
+  );
+
   const compareChartData = useMemo(() => {
     if (!compare?.ranking) return [];
     return compare.ranking.slice(0, 6).map((item) => ({
@@ -1165,7 +1347,16 @@ export default function HedgeEditorialPortal({
 
   const forecastYDomain = useMemo(() => {
     return getSafeYDomain(
-      forecastChartData.flatMap((item) => [item.history, item.forecast]),
+      forecastChartData.flatMap((item) => [
+        item.history,
+        item.forecast,
+        item.ci20_low,
+        item.ci20_high,
+        item.ci30_low,
+        item.ci30_high,
+        ...(item.ic20 ?? []),
+        ...(item.ic30 ?? []),
+      ]),
       0.1
     );
   }, [forecastChartData]);
@@ -1299,1551 +1490,887 @@ export default function HedgeEditorialPortal({
   }, [macroRegime]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-black text-slate-100">
-      <header className="sticky top-0 z-50 border-b border-slate-800 bg-slate-950/95 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 md:px-6 lg:px-8">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={handleGoHome}
-                className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-slate-500 hover:bg-slate-800"
-              >
-                ← Início
-              </button>
+    <div className="relative min-h-screen overflow-hidden bg-brand-bg font-brand text-brand-dark">
+      {/* Grid Guide — Digital Architect */}
+      <div className="grid-guide">
+        <div className="hidden md:block md:col-span-3 grid-guide-col"></div>
+        <div className="hidden md:block md:col-span-6 grid-guide-col"></div>
+        <div className="hidden md:block md:col-span-3 h-full"></div>
+      </div>
 
-              <button
-                type="button"
-                onClick={handleGoHome}
-                className="text-left transition hover:opacity-90"
-              >
-                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-emerald-400/80">
-                  Agro Intelligence Engine
-                </p>
-                <h1 className="mt-1 text-lg font-bold tracking-tight text-white md:text-xl">
-                  Terminal analítico agro
-                </h1>
-              </button>
-            </div>
+      <div className="relative z-10 mx-auto flex min-h-screen max-w-[1400px] flex-col border-x border-stone-300 bg-brand-bg">
+        <header className="sticky top-0 z-50 border-b border-stone-300 bg-brand-bg">
+          <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 md:px-6 lg:px-8">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleGoHome}
+                  className="btn-timac btn-timac-outline !px-4 !py-2 !text-xs"
+                >
+                  ← Início
+                </button>
 
-            <div className="flex flex-wrap items-center gap-2">
-              {presentationMode && (
-                <span className="rounded-full border border-amber-700/80 bg-amber-950/50 px-3 py-1 text-xs font-semibold text-amber-200">
-                  Modo apresentação
+                <button
+                  type="button"
+                  onClick={handleGoHome}
+                  className="text-left transition hover:opacity-90"
+                >
+                  <span className="logo-timac-on-bege">
+                    <img src="/logo-timac.png" alt="Timac AGRO" />
+                  </span>
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full border border-stone-300 bg-white px-3 py-1 font-mono text-xs uppercase text-stone-600">
+                  v2.0.0
                 </span>
-              )}
-              <span className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs text-slate-400">
-                V1 privada
-              </span>
-              <span className="rounded-full border border-emerald-800/70 bg-emerald-950/40 px-3 py-1 text-xs font-semibold text-emerald-300">
-                Mercado • Macro • Clima • Produção
-              </span>
+                <span className="rounded-full border border-stone-300 bg-white px-3 py-1 text-xs font-medium uppercase tracking-widest text-stone-700">
+                  Mercado • Macro • Clima • Produção
+                </span>
+              </div>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      <div className="mx-auto max-w-7xl px-4 py-6 md:px-6 lg:px-8">
-        {presentationMode && (
-          <div className="mb-6 rounded-2xl border border-amber-800/50 bg-amber-950/25 px-4 py-4 text-sm text-slate-200 shadow-lg">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300/90">
-              Roteiro sugerido
-            </p>
-            <p className="mt-2 text-xs leading-relaxed text-slate-400">
-              Acesso para toda a equipe — mesmo conteúdo do terminal; aqui a navegação
-              fica numerada para reuniões e onboarding. Siga as abas na ordem ou
-              abra uma etapa com o parâmetro de URL{" "}
-              <code className="rounded bg-slate-900 px-1.5 py-0.5 text-amber-100/90">
-                ?tab=mercado
-              </code>{" "}
-              ·{" "}
-              <code className="rounded bg-slate-900 px-1.5 py-0.5 text-amber-100/90">
-                macro
-              </code>{" "}
-              ·{" "}
-              <code className="rounded bg-slate-900 px-1.5 py-0.5 text-amber-100/90">
-                mapa
-              </code>{" "}
-              ·{" "}
-              <code className="rounded bg-slate-900 px-1.5 py-0.5 text-amber-100/90">
-                producao
-              </code>
-              .
-            </p>
-            <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-slate-200">
-              <li>
-                <strong className="text-emerald-300/95">Mercado futuro</strong> — séries
-                contínuas, forecast, estratégia, backtest e sentimento.
-              </li>
-              <li>
-                <strong className="text-cyan-300/95">Macro &amp; crédito agro</strong> —
-                regime macro e leitura de financiamento ao agronegócio.
-              </li>
-              <li>
-                <strong className="text-sky-300/95">Mapa agroclimático</strong> — risco
-                territorial e monitoramento municipal.
-              </li>
-              <li>
-                <strong className="text-fuchsia-300/95">Produção agrícola</strong> —
-                safras, histórico e comparativos por UF.
-              </li>
-            </ol>
-          </div>
-        )}
-
+        <div className="mx-auto max-w-7xl w-full px-4 py-6 md:px-6 lg:px-8 flex-1">
         <div className="mb-6 flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => setActiveTab("mercado")}
-            className={`rounded-2xl border px-4 py-2 text-sm font-semibold transition ${
-              activeTab === "mercado"
-                ? "border-emerald-700 bg-emerald-950/60 text-emerald-300"
-                : "border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-500"
-            }`}
+            className={`ds-tab ${activeTab === "mercado" ? "ds-tab-active" : "ds-tab-inactive"}`}
           >
-            {presentationMode ? "1 · " : ""}
             Mercado Futuro
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab("macro")}
-            className={`rounded-2xl border px-4 py-2 text-sm font-semibold transition ${
-              activeTab === "macro"
-                ? "border-cyan-700 bg-cyan-950/60 text-cyan-300"
-                : "border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-500"
-            }`}
+            className={`ds-tab ${activeTab === "macro" ? "ds-tab-active" : "ds-tab-inactive"}`}
           >
-            {presentationMode ? "2 · " : ""}
             Macro & Crédito Agro
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab("mapa")}
-            className={`rounded-2xl border px-4 py-2 text-sm font-semibold transition ${
-              activeTab === "mapa"
-                ? "border-sky-700 bg-sky-950/60 text-sky-300"
-                : "border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-500"
-            }`}
+            className={`ds-tab ${activeTab === "mapa" ? "ds-tab-active" : "ds-tab-inactive"}`}
           >
-            {presentationMode ? "3 · " : ""}
             Mapa Agroclimático
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab("producao")}
-            className={`rounded-2xl border px-4 py-2 text-sm font-semibold transition ${
-              activeTab === "producao"
-                ? "border-fuchsia-700 bg-fuchsia-950/60 text-fuchsia-300"
-                : "border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-500"
-            }`}
+            className={`ds-tab ${activeTab === "producao" ? "ds-tab-active" : "ds-tab-inactive"}`}
           >
-            {presentationMode ? "4 · " : ""}
             Produção Agrícola
           </button>
         </div>
 
-        {macroRegime?.regime && (
-          <div className="mb-6 rounded-3xl border border-slate-800/80 bg-gradient-to-r from-slate-900/95 via-slate-900/85 to-slate-950/95 p-5 shadow-xl backdrop-blur-sm">
-            <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-              <div className="max-w-3xl">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300/80">
-                  Leitura Executiva
-                </p>
-                <div className="mt-2 flex flex-wrap items-center gap-3">
-                  <h2 className="text-2xl font-semibold text-slate-100">
-                    Regime Macro Agro
-                  </h2>
-                  <span
-                    className={`rounded-full border px-3 py-1 text-xs font-semibold ${getMacroRegimeBadgeClass(
-                      macroRegime.regime.badge
-                    )}`}
-                  >
-                    {macroRegime.regime.label}
-                  </span>
-                  <span className="rounded-full border border-slate-700 bg-slate-900/80 px-3 py-1 text-xs font-semibold text-slate-200">
-                    Score: {macroRegime.regime.score}
-                  </span>
-                </div>
-                <p className="mt-3 text-sm leading-6 text-slate-300">
-                  {macroRegime.regime.summary}
-                </p>
-              </div>
-
-              <div className="grid min-w-full grid-cols-1 gap-3 sm:grid-cols-2 xl:min-w-[360px] xl:max-w-[420px]">
-                {macroSignalPills.map((item) => (
-                  <div
-                    key={item.label}
-                    className="rounded-2xl border border-slate-700 bg-slate-950/60 p-3"
-                  >
-                    <p className="text-[11px] uppercase tracking-wide text-slate-400">
-                      {item.label}
-                    </p>
-                    <p className="mt-1 text-sm font-semibold text-slate-100">
-                      {item.value}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-              {macroRegime.regime.contributions.map((item, index) => (
-                <div
-                  key={`${item.factor}-${index}`}
-                  className="rounded-2xl border border-slate-800 bg-slate-950/45 p-3"
-                >
-                  <p className="text-[11px] uppercase tracking-wide text-slate-400">
-                    {item.factor}
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-slate-100">
-                    {item.signal}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Impacto no score: {item.impact > 0 ? `+${item.impact}` : item.impact}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {pageError && (
-          <div className="mb-6 rounded-2xl border border-red-900 bg-red-950/40 p-4 text-sm text-red-300">
-            {pageError}
-          </div>
-        )}
-
-        {loadingMain && activeTab === "mercado" && (
-          <div className="mb-6 rounded-2xl border border-slate-800 bg-slate-900/90 p-4 text-sm text-slate-300 shadow-sm backdrop-blur">
-            Carregando núcleo principal do portal...
-          </div>
-        )}
-
         {activeTab === "mercado" && (
-          <>
-            <div className="mb-6 grid grid-cols-1 gap-6 xl:grid-cols-12">
-              <div className="rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl backdrop-blur-sm xl:col-span-7">
-                <div className="flex flex-col gap-4">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300/80">
-                        Aba Mercado Futuro
-                      </p>
-                      <h2 className="mt-1 text-xl font-semibold text-slate-100">
-                        Seleção de Ativo
-                      </h2>
-                      <p className="mt-1 text-sm text-slate-400">
-                        Escolha o ativo para atualizar as análises quantitativas,
-                        modelos, estratégia, sentimento e backtest.
-                      </p>
-                    </div>
-
-                    <div className="flex w-full max-w-md flex-col gap-2">
-                      <label className="text-sm font-medium text-slate-300">
-                        Ativo
-                      </label>
-                      <select
-                        value={selectedSymbol}
-                        onChange={(e) => setSelectedSymbol(e.target.value)}
-                        className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-slate-100 outline-none transition focus:border-emerald-500"
-                      >
-                        {assets.map((asset) => (
-                          <option key={asset.symbol} value={asset.symbol}>
-                            {asset.symbol} -{" "}
-                            {getAssetDisplayName(asset.symbol, asset.name)}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950/55 p-4 md:p-5">
-                    <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-300/80">
-                          Status de Atualização
-                        </p>
-                        <h3 className="mt-1 text-lg font-semibold text-slate-100">
-                          Atualização B3
-                        </h3>
-                        <p className="mt-1 text-sm text-slate-400">
-                          Leitura operacional da série contínua do ativo
-                          selecionado.
-                        </p>
-                      </div>
-
-                      <span
-                        className={`rounded-full border px-3 py-1 text-xs font-semibold ${getB3StatusBadge(
-                          b3StatusSummary.hasData
-                        )}`}
-                      >
-                        {getB3StatusLabel(b3StatusSummary.hasData)}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                      <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-3">
-                        <p className="text-xs uppercase tracking-wide text-slate-400">
-                          Última data B3
-                        </p>
-                        <p className="mt-1 text-sm font-semibold text-slate-100">
-                          {formatDateOnly(b3StatusSummary.lastDate)}
-                        </p>
-                      </div>
-
-                      <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-3">
-                        <p className="text-xs uppercase tracking-wide text-slate-400">
-                          Ativo monitorado
-                        </p>
-                        <p className="mt-1 text-sm font-semibold text-slate-100">
-                          {selectedSymbol} -{" "}
-                          {getAssetDisplayName(
-                            continuous?.symbol ?? selectedSymbol,
-                            continuous?.name
-                          )}
-                        </p>
-                      </div>
-
-                      <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-3">
-                        <p className="text-xs uppercase tracking-wide text-slate-400">
-                          Linhas da série
-                        </p>
-                        <p className="mt-1 text-sm font-semibold text-slate-100">
-                          {formatNumber(b3StatusSummary.rows, 0)}
-                        </p>
-                      </div>
-
-                      <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-3">
-                        <p className="text-xs uppercase tracking-wide text-slate-400">
-                          Último settlement
-                        </p>
-                        <p className="mt-1 text-sm font-semibold text-slate-100">
-                          {formatNumber(b3StatusSummary.lastSettlement)}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-3">
-                        <p className="text-xs uppercase tracking-wide text-slate-400">
-                          Ativos disponíveis
-                        </p>
-                        <p className="mt-1 text-sm font-semibold text-slate-100">
-                          {formatNumber(assets.length, 0)}
-                        </p>
-                      </div>
-
-                      <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-3">
-                        <p className="text-xs uppercase tracking-wide text-slate-400">
-                          Situação
-                        </p>
-                        <p className="mt-1 text-sm font-semibold text-slate-100">
-                          {b3StatusSummary.hasData
-                            ? "Série contínua carregada com sucesso."
-                            : "Sem leitura disponível para o ativo selecionado."}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+          <div className="reveal active">
+            {/* Section 1: Header & Selection */}
+            <div className="grid grid-cols-1 md:grid-cols-12 border-b border-stone-300">
+              <div className="col-span-1 md:col-span-4 p-8 border-r border-stone-300 flex flex-col justify-between bg-stone-100/50">
+                <div>
+                  <span className="ds-kicker mb-4">01 / Mercado</span>
+                  <h2 className="ds-display leading-tight text-stone-900">
+                    <span className="text-reveal-wrapper reveal-active"><span className="text-reveal-content">Mercado</span></span><br/>
+                    <span className="text-reveal-wrapper reveal-active"><span className="text-reveal-content text-brand-blue">Futuro</span></span>
+                  </h2>
+                  <p className="mt-8 text-sm leading-relaxed text-brand-stone-600 max-w-xs">
+                    Análise quantitativa de derivativos, modelos de projeção e monitoramento de prêmios.
+                  </p>
+                </div>
+                
+                <div className="mt-12">
+                  <label className="ds-field-label block mb-2">
+                    Selecionar Ativo
+                  </label>
+                  <select
+                    value={selectedSymbol}
+                    onChange={(e) => setSelectedSymbol(e.target.value)}
+                    className="w-full rounded-lg border border-stone-300 bg-white px-4 py-3 text-sm text-brand-dark outline-none transition focus:border-brand-blue shadow-sm"
+                  >
+                    {assets.map((asset) => (
+                      <option key={asset.symbol} value={asset.symbol}>
+                        {asset.symbol} - {getAssetDisplayName(asset.symbol, asset.name)}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
-              <div className="rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl backdrop-blur-sm xl:col-span-5">
-                <div className="flex h-full flex-col gap-5">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-300/80">
-                        Operação de Dados
-                      </p>
-                      <h2 className="mt-1 text-xl font-semibold text-slate-100">
-                        Atualização CEPEA
-                      </h2>
-                      <p className="mt-1 text-sm text-slate-400">
-                        Reprocessa spot prices e basis da soja a partir dos
-                        arquivos em{" "}
-                        <span className="font-semibold">data/raw/cepea_spot</span>.
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={handleUpdateCepea}
-                      disabled={updatingCepea}
-                      className={`rounded-2xl px-4 py-2 text-sm font-semibold transition ${
-                        updatingCepea
-                          ? "cursor-not-allowed border border-slate-700 bg-slate-800 text-slate-400"
-                          : "border border-emerald-700 bg-emerald-500 text-slate-950 hover:bg-emerald-400"
-                      }`}
-                    >
-                      {updatingCepea ? "Atualizando..." : "Atualizar CEPEA"}
-                    </button>
+              <div className="col-span-1 md:col-span-8 grid grid-cols-1 md:grid-cols-2">
+                <div className="p-8 border-r border-stone-300 flex flex-col justify-center group hover:bg-white transition-colors">
+                  <div className="flex items-center justify-between mb-6">
+                    <span className="ds-field-label">Status B3</span>
+                    <span className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-wider ${getB3StatusBadge(b3StatusSummary.hasData)}`}>
+                      {getB3StatusLabel(b3StatusSummary.hasData)}
+                    </span>
                   </div>
-
-                  <div className="rounded-2xl border border-slate-800 bg-slate-800/60 p-4">
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <p className="text-sm font-semibold text-slate-100">
-                        Executar rebuild CEPEA
-                      </p>
-                      <span
-                        className={`rounded-full border px-3 py-1 text-xs font-semibold ${getUpdateStatusBadge(
-                          cepeaStatus?.status
-                        )}`}
-                      >
-                        {loadingCepeaStatus
-                          ? "Carregando..."
-                          : formatUpdateStatusLabel(cepeaStatus?.status)}
+                  <div className="space-y-4">
+                    <div className="flex justify-between border-b border-stone-300 pb-2">
+                      <span className="text-xs text-brand-stone-600">Última Data</span>
+                      <span className="text-xs font-bold">{formatDateOnly(b3StatusSummary.lastDate)}</span>
+                    </div>
+                    <div className="flex justify-between border-b border-stone-300 pb-2">
+                      <span className="text-xs text-brand-stone-600">Settlement</span>
+                      <span className="text-xs font-bold text-right">
+                        {formatNumber(b3StatusSummary.lastSettlement)}
+                        {mercadoPriceSpec.axisShort ? (
+                          <span className="block text-[10px] font-semibold text-brand-stone-500 normal-case">
+                            {mercadoPriceSpec.axisShort}
+                          </span>
+                        ) : null}
                       </span>
                     </div>
-
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-3">
-                        <p className="text-xs uppercase tracking-wide text-slate-400">
-                          Status atual
-                        </p>
-                        <p className="mt-1 text-sm font-semibold text-slate-100">
-                          {loadingCepeaStatus
-                            ? "Carregando..."
-                            : formatUpdateStatusLabel(cepeaStatus?.status)}
-                        </p>
-                      </div>
-
-                      <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-3">
-                        <p className="text-xs uppercase tracking-wide text-slate-400">
-                          Última execução
-                        </p>
-                        <p className="mt-1 text-sm font-semibold text-slate-100">
-                          {formatDateTime(cepeaStatus?.updated_at)}
-                        </p>
-                      </div>
-
-                      <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-3">
-                        <p className="text-xs uppercase tracking-wide text-slate-400">
-                          Última data spot
-                        </p>
-                        <p className="mt-1 text-sm font-semibold text-slate-100">
-                          {formatDateOnly(cepeaStatus?.last_spot_date)}
-                        </p>
-                      </div>
-
-                      <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-3">
-                        <p className="text-xs uppercase tracking-wide text-slate-400">
-                          Último basis
-                        </p>
-                        <p className="mt-1 text-sm font-semibold text-slate-100">
-                          {formatDateOnly(cepeaStatus?.last_spread_date)}
-                        </p>
-                      </div>
+                    <div className="flex justify-between border-b border-stone-300 pb-2">
+                      <span className="text-xs text-brand-stone-600">Registros</span>
+                      <span className="text-xs font-bold">{formatNumber(b3StatusSummary.rows, 0)}</span>
                     </div>
+                  </div>
+                </div>
 
-                    {cepeaStatus?.spot_prices_symbols?.length ? (
-                      <div className="mt-4">
-                        <p className="mb-2 text-xs uppercase tracking-wide text-slate-400">
-                          Símbolos processados
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {cepeaStatus.spot_prices_symbols.map((symbol) => (
-                            <span
-                              key={symbol}
-                              className="rounded-full border border-slate-700 bg-slate-900/60 px-3 py-1 text-xs text-slate-300"
-                            >
-                              {symbol}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {(cepeaActionMessage || cepeaStatus?.message) && (
-                      <div className="mt-4 rounded-2xl border border-slate-700 bg-slate-900/60 p-3 text-sm leading-6 text-slate-300">
-                        {cepeaActionMessage || cepeaStatus?.message}
-                      </div>
-                    )}
+                <div className="p-8 flex flex-col justify-center group hover:bg-white transition-colors bg-stone-100/40">
+                  <div className="flex items-center justify-between mb-6">
+                    <span className="ds-field-label">Pipeline CEPEA</span>
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full ${cepeaStatus?.status === 'ok' || cepeaStatus?.status === 'ok_fallback_local_rebuild' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></span>
+                      <span className="ds-field-label">Automático</span>
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="flex justify-between border-b border-stone-300 pb-2">
+                      <span className="text-xs text-brand-stone-600">Status</span>
+                      <span className="text-xs font-bold">{formatUpdateStatusLabel(cepeaStatus?.status)}</span>
+                    </div>
+                    <div className="flex justify-between border-b border-stone-300 pb-2">
+                      <span className="text-xs text-brand-stone-600">Último Basis</span>
+                      <span className="text-xs font-bold">{formatDateOnly(cepeaStatus?.last_spread_date)}</span>
+                    </div>
+                    <div className="flex justify-between border-b border-stone-300 pb-2">
+                      <span className="text-xs text-brand-stone-600">Sincronização</span>
+                      <span className="text-xs font-bold">{formatDateTime(cepeaStatus?.updated_at)}</span>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
-              <div className="space-y-6 xl:col-span-8">
-                <div className="rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl backdrop-blur-sm">
-                  <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <h2 className="text-xl font-semibold text-slate-100">
-                        Série Contínua —{" "}
-                        {getAssetDisplayName(
-                          continuous?.symbol ?? selectedSymbol,
-                          continuous?.name
-                        )}
-                      </h2>
-                      <p className="text-sm text-slate-400">
-                        Histórico de settlement do ativo selecionado.
-                      </p>
+            {/* Características de cotação & contrato (B3) */}
+            <div className="border-b border-stone-300 bg-gradient-to-b from-white to-stone-100/50">
+              <div className="p-6 md:p-8">
+                <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-6">
+                  <div>
+                    <span className="ds-field-label block mb-1">
+                      Características do preço
+                    </span>
+                    <h3 className="text-lg font-bold tracking-tight text-brand-dark">
+                      {selectedSymbol} · {getAssetDisplayName(selectedSymbol, assets.find((a) => a.symbol === selectedSymbol)?.name)}
+                    </h3>
+                    <p className="mt-1 text-xs text-brand-stone-600 max-w-2xl">
+                      Referência de negociação na {mercadoPriceSpec.exchange}: moeda de cotação, unidade do ajuste e tamanho típico do contrato.
+                    </p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                  <div className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm">
+                    <span className="ds-field-label block mb-1">Moeda</span>
+                    <span className="text-sm font-bold text-brand-dark">{mercadoPriceSpec.currencyLabel}</span>
+                    <span className="text-[10px] text-brand-stone-500 block mt-0.5">{mercadoPriceSpec.currencyCode}</span>
+                  </div>
+                  <div className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm sm:col-span-2 lg:col-span-2">
+                    <span className="ds-field-label block mb-1">Unidade de cotação</span>
+                    <span className="text-sm font-bold text-brand-dark">{mercadoPriceSpec.quoteKind}</span>
+                    <span className="text-[10px] text-brand-stone-600 block mt-1 leading-snug">{mercadoPriceSpec.quoteDetail}</span>
+                  </div>
+                  <div className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm">
+                    <span className="ds-field-label block mb-1">Contrato (lote)</span>
+                    <span className="text-sm font-bold text-brand-dark">{mercadoPriceSpec.contractLot}</span>
+                  </div>
+                  <div className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm">
+                    <span className="ds-field-label block mb-1">Série exibida</span>
+                    <span className="text-sm font-bold text-brand-dark">Ajuste / contínua</span>
+                    <span className="text-[10px] text-brand-stone-500 block mt-0.5">{mercadoPriceSpec.axisShort || "—"}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-                      {continuousSummary && (
-                        <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                          <span className="rounded-full border border-slate-700 bg-slate-800/70 px-3 py-1 text-slate-200">
-                            Início: {formatNumber(continuousSummary.first)}
-                          </span>
-                          <span className="rounded-full border border-slate-700 bg-slate-800/70 px-3 py-1 text-slate-200">
-                            Fim: {formatNumber(continuousSummary.last)}
-                          </span>
-                          <span className="rounded-full border border-slate-700 bg-slate-800/70 px-3 py-1 text-slate-200">
-                            Variação: {formatNumber(continuousSummary.pct, 2)}%
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="text-sm text-slate-400">
-                      Observações:{" "}
-                      <span className="font-semibold text-slate-100">
-                        {seriesData.length}
-                      </span>
+            {/* Section 2: Chart & Insights */}
+            <div className="grid grid-cols-1 md:grid-cols-12 border-b border-stone-300">
+              <div className="col-span-1 md:col-span-12 p-8 border-b border-stone-300 bg-stone-100/40">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                  <div className="lg:col-span-7 xl:col-span-8">
+                    <span className="ds-field-label mb-2 block">Retrato Horizontal</span>
+                    <h3 className="text-xl font-bold text-brand-dark mb-4">Sinais de mercado — {selectedSymbol}</h3>
+                    <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+                      <div className="p-4 rounded-xl border border-stone-300 bg-white">
+                        <span className="ds-field-label block mb-1">Estratégia</span>
+                        <span className={`inline-block rounded-full px-2 py-0.5 text-[9px] font-bold uppercase ${getSignalBadge(strategy?.signal)}`}>
+                          {formatSignalName(strategy?.signal)}
+                        </span>
+                      </div>
+                      <div className="p-4 rounded-xl border border-stone-300 bg-white">
+                        <span className="ds-field-label block mb-1">Sentimento</span>
+                        <span className={`inline-block rounded-full px-2 py-0.5 text-[9px] font-bold uppercase ${getSentimentBadge(sentiment?.sentiment_label)}`}>
+                          {sentiment?.sentiment_label || "Neutro"}
+                        </span>
+                      </div>
+                      <div className="p-4 rounded-xl border border-stone-300 bg-white">
+                        <span className="ds-field-label block mb-1">Volatilidade</span>
+                        <span className="text-sm font-bold text-brand-dark">Moderada</span>
+                      </div>
+                      <div className="p-4 rounded-xl border border-stone-300 bg-white">
+                        <span className="ds-field-label block mb-1">Tendência</span>
+                        <span className="text-sm font-bold text-brand-dark">Lateral</span>
+                      </div>
                     </div>
                   </div>
+                  <div className="lg:col-span-5 xl:col-span-4 p-5 rounded-2xl border border-brand-blue/20 bg-white shadow-sm flex flex-col justify-center min-h-[140px]">
+                    <span className="ds-field-label mb-2 block text-brand-blue">Resumo quantitativo</span>
+                    <p className="text-xs leading-relaxed text-brand-stone-600 italic">
+                      {strategy?.insight || "Análise quantitativa processando sinais de B3 e CEPEA..."}
+                    </p>
+                  </div>
+                </div>
+              </div>
 
-                  <div className="h-[360px]">
+              <div className="col-span-1 md:col-span-9 border-r border-stone-300 p-8">
+                <div className="mb-8 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+                  <div>
+                    <span className="ds-field-label mb-2 block">Visualização temporal</span>
+                    <h3 className="text-2xl md:text-3xl font-bold tracking-tighter text-brand-dark">Série contínua</h3>
+                    {mercadoPriceSpec.axisShort ? (
+                      <p className="mt-1 text-xs text-brand-stone-600">
+                        Eixo: <span className="font-semibold text-brand-dark">{mercadoPriceSpec.axisShort}</span>
+                        {" · "}
+                        {mercadoPriceSpec.currencyLabel}
+                      </p>
+                    ) : null}
+                  </div>
+                  {continuousSummary && (
+                    <div className="flex gap-4">
+                      <div className="text-right">
+                        <span className="ds-field-label block">Variação</span>
+                        <span className="text-lg font-bold text-brand-blue">{formatNumber(continuousSummary.pct, 2)}%</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="h-[400px] w-full">
+                  {seriesData.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={seriesData}>
                         <defs>
-                          <linearGradient
-                            id="priceFill"
-                            x1="0"
-                            y1="0"
-                            x2="0"
-                            y2="1"
-                          >
-                            <stop
-                              offset="0%"
-                              stopColor={SILVER}
-                              stopOpacity={0.3}
-                            />
-                            <stop
-                              offset="100%"
-                              stopColor={SILVER}
-                              stopOpacity={0.03}
-                            />
+                          <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#0071B9" stopOpacity={0.1}/>
+                            <stop offset="95%" stopColor="#0071B9" stopOpacity={0}/>
                           </linearGradient>
                         </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                        <XAxis
-                          dataKey="date"
-                          tick={{ fontSize: 11, fill: "#cbd5e1" }}
-                          minTickGap={24}
-                          tickFormatter={(value) =>
-                            formatShortDate(String(value))
-                          }
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                        <XAxis 
+                          dataKey="date" 
+                          tick={{ fontSize: 10, fill: "#78716c" }}
+                          axisLine={{ stroke: '#d6d3d1' }}
+                          tickLine={false}
+                          minTickGap={30}
+                          tickFormatter={formatShortDate}
                         />
-                        <YAxis
+                        <YAxis 
+                          tick={{ fontSize: 10, fill: "#78716c" }}
+                          axisLine={false}
+                          tickLine={false}
                           domain={continuousYDomain}
-                          tick={{ fontSize: 11, fill: "#cbd5e1" }}
-                          tickFormatter={(value) =>
-                            formatNumber(Number(value), 2)
+                          tickFormatter={(v) => formatNumber(v, 2)}
+                          label={
+                            mercadoPriceSpec.axisShort
+                              ? {
+                                  value: mercadoPriceSpec.axisShort,
+                                  angle: -90,
+                                  position: "insideLeft",
+                                  offset: 4,
+                                  style: { fill: "#78716c", fontSize: 10, fontWeight: 600 },
+                                }
+                              : undefined
                           }
                         />
-                        <Tooltip
-                          {...chartTooltipStyle()}
-                          labelFormatter={(label) =>
-                            formatShortDate(String(label))
-                          }
-                        />
-                        <Legend />
+                        <Tooltip contentStyle={chartTooltipStyle().contentStyle} />
                         <Area
                           type="monotone"
                           dataKey="settlement"
-                          name="Preço"
-                          stroke={SILVER}
-                          fill="url(#priceFill)"
-                          strokeWidth={2.5}
-                          dot={false}
+                          stroke="#0071B9"
+                          strokeWidth={2}
+                          fillOpacity={1}
+                          fill="url(#colorPrice)"
+                          isAnimationActive={false}
                         />
                       </AreaChart>
                     </ResponsiveContainer>
-                  </div>
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-sm text-brand-stone-400">
+                      Sem dados de série contínua para exibir.
+                    </div>
+                  )}
                 </div>
+              </div>
 
-                <div className="rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl backdrop-blur-sm">
-                  <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <div className="col-span-1 md:col-span-3 flex flex-col">
+                <div className="p-8 border-b border-stone-300 flex-1 group hover:bg-white transition-colors">
+                  <span className="ds-field-label mb-4 block">Estratégia Sugerida</span>
+                  {strategy ? (
                     <div>
-                      <h2 className="text-xl font-semibold text-slate-100">
-                        Forecast
-                      </h2>
-                      <p className="text-sm text-slate-400">
-                        Histórico recente + projeção com o melhor modelo do
-                        compare.
+                      <span className={`inline-block rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wider mb-3 ${getSignalBadge(strategy.signal)}`}>
+                        {formatSignalName(strategy.signal)}
+                      </span>
+                      <p className="text-xs leading-relaxed text-brand-stone-600">
+                        {strategy.insight}
                       </p>
                     </div>
-
-                    {forecast && (
-                      <div className="rounded-full bg-slate-800 px-3 py-1 text-xs font-semibold text-slate-200">
-                        Modelo: {formatModelName(forecast.model)}
+                  ) : (
+                    <p className="text-xs text-brand-stone-400">Aguardando dados...</p>
+                  )}
+                </div>
+                <div className="p-8 border-b border-stone-300 flex-1 group hover:bg-white transition-colors">
+                  <span className="ds-field-label mb-4 block">Sentimento de Mercado</span>
+                  {sentiment ? (
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="text-2xl font-bold tracking-tighter">{formatNumber(sentiment.sentiment_score, 1)}</span>
+                        <span className={`text-[10px] font-bold uppercase ${getSentimentBadge(sentiment.sentiment_label)}`}>
+                          {sentiment.sentiment_label}
+                        </span>
                       </div>
+                      <p className="text-xs leading-relaxed text-brand-stone-600">
+                        {sentiment.editorial_summary}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-brand-stone-400">Aguardando dados...</p>
+                  )}
+                </div>
+                <div className="p-8 flex-1 group hover:bg-white transition-colors bg-stone-50/90">
+                  <span className="ds-field-label mb-4 block">Manchetes Monitoradas</span>
+                  <div className="space-y-3">
+                    {sentiment?.latest_headlines?.map((h: any, i: number) => {
+                      const title = typeof h === 'string' ? h : h?.title;
+                      if (!title) return null;
+                      return (
+                        <div key={i} className="p-3 rounded-lg border border-stone-200 bg-white/50 text-[10px] text-brand-stone-600 leading-snug">
+                          {title}
+                        </div>
+                      );
+                    })}
+                    {(!sentiment?.latest_headlines || sentiment.latest_headlines.length === 0) && (
+                      <p className="text-[10px] text-brand-stone-400 italic">Nenhuma manchete recente para este ativo.</p>
                     )}
                   </div>
+                </div>
+              </div>
+            </div>
 
-                  <div className="mb-5 h-[300px]">
+            {/* Section 3: Forecast & Basis */}
+            <div className="grid grid-cols-1 md:grid-cols-12 border-b border-stone-300">
+              <div className="col-span-1 md:col-span-4 p-8 border-r border-stone-300 bg-stone-100/60">
+                <span className="ds-field-label mb-4 block">Projeção Inteligente</span>
+                <h3 className="text-3xl font-bold tracking-tighter text-brand-dark mb-2">Forecast Engine</h3>
+                {mercadoPriceSpec.axisShort ? (
+                  <p className="mb-6 text-xs text-brand-stone-600">
+                    Projeção na mesma unidade da série: <span className="font-semibold text-brand-dark">{mercadoPriceSpec.axisShort}</span>
+                  </p>
+                ) : (
+                  <div className="mb-6" />
+                )}
+                {forecast && (
+                  <div className="space-y-6">
+                    <div className="p-4 rounded-xl border border-brand-blue/20 bg-brand-blue/5 shadow-sm">
+                      <span className="ds-field-label mb-1 block text-brand-blue">Modelo Ativo</span>
+                      <span className="text-sm font-bold text-brand-dark">{forecast.model?.toUpperCase() || "Ensemble Quant"}</span>
+                    </div>
+                    <div className="group p-4 rounded-xl border border-stone-300 bg-white shadow-sm hover:shadow-md transition-all">
+                      <span className="ds-field-label block mb-1">Média prevista</span>
+                      <span className="text-2xl font-bold text-brand-dark">{formatNumber(forecast.metrics.forecast_mean)}</span>
+                      {mercadoPriceSpec.axisShort ? (
+                        <span className="mt-1 block text-[10px] text-brand-stone-500">{mercadoPriceSpec.axisShort}</span>
+                      ) : null}
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-3 rounded-lg border border-stone-300 bg-white/50">
+                        <span className="text-[8px] font-bold uppercase text-brand-stone-600 block">Mínimo</span>
+                        <span className="text-sm font-bold">{formatNumber(forecast.metrics.forecast_min)}</span>
+                      </div>
+                      <div className="p-3 rounded-lg border border-stone-300 bg-white/50">
+                        <span className="text-[8px] font-bold uppercase text-brand-stone-600 block">Máximo</span>
+                        <span className="text-sm font-bold">{formatNumber(forecast.metrics.forecast_max)}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="col-span-1 md:col-span-8 p-8">
+                <div className="mb-4">
+                  <span className="ds-field-label block">Horizonte de projeção</span>
+                  {mercadoPriceSpec.axisShort ? (
+                    <p className="text-xs text-brand-stone-600 mt-1">Eixo do gráfico: {mercadoPriceSpec.axisShort}</p>
+                  ) : null}
+                </div>
+                <div className="h-[350px] w-full">
+                  {forecastChartData.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={forecastChartData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                        <XAxis
-                          dataKey="label"
-                          tick={{ fontSize: 11, fill: "#cbd5e1" }}
-                          minTickGap={20}
+                      <ComposedChart data={forecastChartData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                        <XAxis 
+                          dataKey="label" 
+                          tick={{ fontSize: 10, fill: "#78716c" }} 
+                          axisLine={{ stroke: '#d6d3d1' }} 
+                          tickLine={false} 
+                          minTickGap={30}
                         />
                         <YAxis
+                          tick={{ fontSize: 10, fill: "#78716c" }}
+                          axisLine={false}
+                          tickLine={false}
                           domain={forecastYDomain}
-                          tick={{ fontSize: 11, fill: "#cbd5e1" }}
-                          tickFormatter={(value) =>
-                            formatNumber(Number(value), 2)
+                          tickFormatter={(v) => formatNumber(v, 2)}
+                          label={
+                            mercadoPriceSpec.axisShort
+                              ? {
+                                  value: mercadoPriceSpec.axisShort,
+                                  angle: -90,
+                                  position: "insideLeft",
+                                  offset: 4,
+                                  style: { fill: "#78716c", fontSize: 10, fontWeight: 600 },
+                                }
+                              : undefined
                           }
                         />
-                        <Tooltip {...chartTooltipStyle()} />
-                        <Legend />
+                        <Tooltip
+                          contentStyle={chartTooltipStyle().contentStyle}
+                          formatter={(v: unknown, name?: string) => {
+                            const n = name ?? "";
+                            if (n.includes("Limite")) {
+                              return [null, null];
+                            }
+                            if (Array.isArray(v) && v.length >= 2) {
+                              return [
+                                `${formatNumber(Number(v[0]), 2)} – ${formatNumber(Number(v[1]), 2)}`,
+                                n,
+                              ];
+                            }
+                            return [formatNumber(Number(v), 2), n];
+                          }}
+                          labelFormatter={(label) => `Período: ${label}`}
+                        />
+                        <Legend
+                          wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
+                          formatter={(value) => (
+                            <span className="text-brand-stone-700">{value}</span>
+                          )}
+                        />
+                        {/* Intervalos: tupla [inf, sup] — faixa real entre curvas, sem baseline em 0 */}
+                        <Area
+                          type="monotone"
+                          dataKey="ic30"
+                          stroke="none"
+                          fill="#0071B9"
+                          fillOpacity={0.22}
+                          connectNulls={false}
+                          isAnimationActive={false}
+                          name="IC ~30%"
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="ic20"
+                          stroke="none"
+                          fill="#38BDF8"
+                          fillOpacity={0.35}
+                          connectNulls={false}
+                          isAnimationActive={false}
+                          name="IC ~20%"
+                        />
                         <Line
                           type="monotone"
-                          dataKey="history"
-                          name="Histórico"
-                          stroke={SILVER}
-                          strokeWidth={2.5}
+                          dataKey="ci30_low"
+                          stroke="#0071B9"
+                          strokeWidth={1.25}
+                          strokeOpacity={0.55}
+                          strokeDasharray="5 4"
                           dot={false}
                           connectNulls={false}
+                          isAnimationActive={false}
+                          name="Limite 30% inf."
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="ci30_high"
+                          stroke="#0071B9"
+                          strokeWidth={1.25}
+                          strokeOpacity={0.55}
+                          strokeDasharray="5 4"
+                          dot={false}
+                          connectNulls={false}
+                          isAnimationActive={false}
+                          name="Limite 30% sup."
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="ci20_low"
+                          stroke="#0ea5e9"
+                          strokeWidth={1}
+                          strokeOpacity={0.75}
+                          strokeDasharray="3 3"
+                          dot={false}
+                          connectNulls={false}
+                          isAnimationActive={false}
+                          name="Limite 20% inf."
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="ci20_high"
+                          stroke="#0ea5e9"
+                          strokeWidth={1}
+                          strokeOpacity={0.75}
+                          strokeDasharray="3 3"
+                          dot={false}
+                          connectNulls={false}
+                          isAnimationActive={false}
+                          name="Limite 20% sup."
                         />
                         <Line
                           type="monotone"
                           dataKey="forecast"
-                          name="Forecast"
-                          stroke={FORECAST_GREEN}
-                          strokeWidth={2.5}
-                          strokeDasharray="6 4"
+                          stroke="#0071B9"
+                          strokeWidth={3}
                           dot={false}
                           connectNulls
+                          isAnimationActive={false}
+                          name="Projeção"
                         />
-                      </LineChart>
+                        <Line
+                          type="monotone"
+                          dataKey="history"
+                          stroke="#78716c"
+                          strokeWidth={2}
+                          dot={false}
+                          connectNulls
+                          isAnimationActive={false}
+                          name="Histórico"
+                        />
+                      </ComposedChart>
                     </ResponsiveContainer>
-                  </div>
-
-                  {forecast && (
-                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
-                      <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-3">
-                        <p className="text-xs uppercase tracking-wide text-slate-400">
-                          Último preço
-                        </p>
-                        <p className="mt-1 text-sm font-semibold text-slate-100">
-                          {formatNumber(forecast.metrics.history_last)}
-                        </p>
-                      </div>
-                      <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-3">
-                        <p className="text-xs uppercase tracking-wide text-slate-400">
-                          Média prevista
-                        </p>
-                        <p className="mt-1 text-sm font-semibold text-slate-100">
-                          {formatNumber(forecast.metrics.forecast_mean)}
-                        </p>
-                      </div>
-                      <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-3">
-                        <p className="text-xs uppercase tracking-wide text-slate-400">
-                          Mínimo previsto
-                        </p>
-                        <p className="mt-1 text-sm font-semibold text-slate-100">
-                          {formatNumber(forecast.metrics.forecast_min)}
-                        </p>
-                      </div>
-                      <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-3">
-                        <p className="text-xs uppercase tracking-wide text-slate-400">
-                          Máximo previsto
-                        </p>
-                        <p className="mt-1 text-sm font-semibold text-slate-100">
-                          {formatNumber(forecast.metrics.forecast_max)}
-                        </p>
-                      </div>
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-sm text-brand-stone-400">
+                      Sem dados de projeção para exibir.
                     </div>
-                  )}
-
-                  {forecast?.insight && (
-                    <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-800/70 p-3 text-sm leading-6 text-slate-300">
-                      {forecast.insight}
-                    </div>
-                  )}
-                </div>
-
-                <div className="rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl backdrop-blur-sm">
-                  <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <h2 className="text-xl font-semibold text-slate-100">
-                        Ranking de Modelos
-                      </h2>
-                      <p className="text-sm text-slate-400">
-                        Compare com horizonte{" "}
-                        {compare?.horizon ?? compareHorizon}.
-                      </p>
-                    </div>
-
-                    {compare && (
-                      <div className="rounded-full bg-slate-800 px-3 py-1 text-xs font-semibold text-slate-200">
-                        Best model: {formatModelName(compare.best_model)}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="mb-5 h-[280px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={compareChartData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                        <XAxis
-                          dataKey="model"
-                          tick={{ fontSize: 11, fill: "#cbd5e1" }}
-                        />
-                        <YAxis tick={{ fontSize: 11, fill: "#cbd5e1" }} />
-                        <Tooltip {...chartTooltipStyle()} />
-                        <Legend />
-                        <Bar
-                          dataKey="rmse"
-                          name="RMSE"
-                          fill="#60A5FA"
-                          radius={[6, 6, 0, 0]}
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-
-                  {compare?.insight && (
-                    <div className="mb-4 rounded-2xl border border-slate-800 bg-slate-800/70 p-3 text-sm leading-6 text-slate-300">
-                      {compare.insight}
-                    </div>
-                  )}
-
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-slate-700 text-left text-slate-400">
-                          <th className="py-2 pr-3">Modelo</th>
-                          <th className="py-2 pr-3">RMSE</th>
-                          <th className="py-2 pr-3">MAE</th>
-                          <th className="py-2 pr-3">MAPE</th>
-                          <th className="py-2 pr-3">Dir. Acc.</th>
-                          <th className="py-2 pr-3">Bias</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {compare?.ranking?.map((item) => (
-                          <tr
-                            key={item.model}
-                            className="border-b border-slate-800 last:border-0"
-                          >
-                            <td className="py-2 pr-3 font-medium text-slate-100">
-                              {formatModelName(item.model)}
-                            </td>
-                            <td className="py-2 pr-3 text-slate-300">
-                              {formatNumber(item.rmse)}
-                            </td>
-                            <td className="py-2 pr-3 text-slate-300">
-                              {formatNumber(item.mae)}
-                            </td>
-                            <td className="py-2 pr-3 text-slate-300">
-                              {formatNumber(item.mape)}%
-                            </td>
-                            <td className="py-2 pr-3 text-slate-300">
-                              {formatNumber(item.directional_accuracy, 1)}%
-                            </td>
-                            <td className="py-2 pr-3 text-slate-300">
-                              {formatNumber(item.bias)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                <div className="rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl backdrop-blur-sm">
-                  <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <h2 className="text-xl font-semibold text-slate-100">
-                        Backtest Robusto
-                      </h2>
-                      <p className="text-sm text-slate-400">
-                        Walk-forward validation com foco em erro e direção.
-                      </p>
-                    </div>
-
-                    {loadingBacktest ? (
-                      <div className="rounded-full bg-slate-800 px-3 py-1 text-xs font-semibold text-slate-300">
-                        Carregando backtest...
-                      </div>
-                    ) : backtest ? (
-                      <div className="flex flex-wrap gap-2 text-xs">
-                        <span className="rounded-full bg-slate-800 px-3 py-1 font-semibold text-slate-200">
-                          Obs: {backtest.n_obs}
-                        </span>
-                        <span className="rounded-full bg-slate-800 px-3 py-1 font-semibold text-slate-200">
-                          Folds: {backtest.total_folds}
-                        </span>
-                        <span className="rounded-full bg-slate-800 px-3 py-1 font-semibold text-slate-200">
-                          Modelos válidos: {backtest.valid_models}
-                        </span>
-                      </div>
-                    ) : null}
-                  </div>
-
-                  {loadingBacktest && (
-                    <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4 text-sm text-slate-300">
-                      O backtest é carregado em segundo plano para não atrasar o
-                      restante do portal.
-                    </div>
-                  )}
-
-                  {!loadingBacktest && backtest?.insight && (
-                    <div className="mb-5 rounded-2xl border border-slate-800 bg-slate-800/70 p-3 text-sm leading-6 text-slate-300">
-                      {backtest.insight}
-                    </div>
-                  )}
-
-                  {!loadingBacktest && backtest && (
-                    <>
-                      <div className="mb-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
-                        <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4">
-                          <p className="text-xs uppercase tracking-wide text-slate-400">
-                            Melhor por RMSE
-                          </p>
-                          <p className="mt-1 text-base font-semibold text-slate-100">
-                            {formatModelName(backtest.best_model_rmse)}
-                          </p>
-                        </div>
-
-                        <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4">
-                          <p className="text-xs uppercase tracking-wide text-slate-400">
-                            Melhor por Direção
-                          </p>
-                          <p className="mt-1 text-base font-semibold text-slate-100">
-                            {formatModelName(backtest.best_model_directional)}
-                          </p>
-                        </div>
-
-                        <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4">
-                          <p className="text-xs uppercase tracking-wide text-slate-400">
-                            Parâmetros
-                          </p>
-                          <p className="mt-1 text-sm text-slate-300">
-                            horizon={backtest.horizon}, train=
-                            {backtest.train_min_size}, step={backtest.step}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="mb-5 grid grid-cols-1 gap-6 xl:grid-cols-2">
-                        <div className="rounded-2xl border border-slate-800 bg-slate-800/40 p-4">
-                          <h3 className="mb-3 text-lg font-semibold text-slate-100">
-                            RMSE
-                          </h3>
-                          <div className="h-[260px]">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <BarChart data={backtestRmseChartData}>
-                                <CartesianGrid
-                                  strokeDasharray="3 3"
-                                  stroke="#334155"
-                                />
-                                <XAxis
-                                  dataKey="model"
-                                  tick={{ fontSize: 11, fill: "#cbd5e1" }}
-                                />
-                                <YAxis tick={{ fontSize: 11, fill: "#cbd5e1" }} />
-                                <Tooltip {...chartTooltipStyle()} />
-                                <Legend />
-                                <Bar
-                                  dataKey="rmse"
-                                  name="RMSE"
-                                  fill="#14B8A6"
-                                  radius={[6, 6, 0, 0]}
-                                />
-                              </BarChart>
-                            </ResponsiveContainer>
-                          </div>
-                        </div>
-
-                        <div className="rounded-2xl border border-slate-800 bg-slate-800/40 p-4">
-                          <h3 className="mb-3 text-lg font-semibold text-slate-100">
-                            Directional Accuracy
-                          </h3>
-                          <div className="h-[260px]">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <BarChart data={backtestDirectionalChartData}>
-                                <CartesianGrid
-                                  strokeDasharray="3 3"
-                                  stroke="#334155"
-                                />
-                                <XAxis
-                                  dataKey="model"
-                                  tick={{ fontSize: 11, fill: "#cbd5e1" }}
-                                />
-                                <YAxis
-                                  domain={[0, 100]}
-                                  tick={{ fontSize: 11, fill: "#cbd5e1" }}
-                                  tickFormatter={(value) => `${value}%`}
-                                />
-                                <Tooltip
-                                  {...chartTooltipStyle()}
-                                  formatter={(value) => [
-                                    value == null ? "-" : `${formatNumber(Number(value), 1)}%`,
-                                    "Directional Accuracy",
-                                  ]}
-                                />
-                                <Legend />
-                                <Bar
-                                  dataKey="directional_accuracy"
-                                  name="Directional Accuracy"
-                                  fill="#F59E0B"
-                                  radius={[6, 6, 0, 0]}
-                                />
-                              </BarChart>
-                            </ResponsiveContainer>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                        <div>
-                          <h3 className="mb-3 text-lg font-semibold text-slate-100">
-                            Ranking por RMSE
-                          </h3>
-                          <div className="overflow-x-auto">
-                            <table className="min-w-full text-sm">
-                              <thead>
-                                <tr className="border-b border-slate-700 text-left text-slate-400">
-                                  <th className="py-2 pr-3">Modelo</th>
-                                  <th className="py-2 pr-3">Família</th>
-                                  <th className="py-2 pr-3">RMSE</th>
-                                  <th className="py-2 pr-3">Dir. Acc.</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {backtest.ranking_rmse.map((item) => (
-                                  <tr
-                                    key={`rmse-${item.model}`}
-                                    className="border-b border-slate-800 last:border-0"
-                                  >
-                                    <td className="py-2 pr-3 font-medium text-slate-100">
-                                      {formatModelName(item.model)}
-                                    </td>
-                                    <td className="py-2 pr-3 text-slate-300">
-                                      {item.family}
-                                    </td>
-                                    <td className="py-2 pr-3 text-slate-300">
-                                      {formatNumber(item.rmse)}
-                                    </td>
-                                    <td className="py-2 pr-3 text-slate-300">
-                                      {formatNumber(
-                                        item.directional_accuracy,
-                                        1
-                                      )}
-                                      %
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-
-                        <div>
-                          <h3 className="mb-3 text-lg font-semibold text-slate-100">
-                            Ranking por Direção
-                          </h3>
-                          <div className="overflow-x-auto">
-                            <table className="min-w-full text-sm">
-                              <thead>
-                                <tr className="border-b border-slate-700 text-left text-slate-400">
-                                  <th className="py-2 pr-3">Modelo</th>
-                                  <th className="py-2 pr-3">Família</th>
-                                  <th className="py-2 pr-3">Dir. Acc.</th>
-                                  <th className="py-2 pr-3">RMSE</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {backtest.ranking_directional.map((item) => (
-                                  <tr
-                                    key={`dir-${item.model}`}
-                                    className="border-b border-slate-800 last:border-0"
-                                  >
-                                    <td className="py-2 pr-3 font-medium text-slate-100">
-                                      {formatModelName(item.model)}
-                                    </td>
-                                    <td className="py-2 pr-3 text-slate-300">
-                                      {item.family}
-                                    </td>
-                                    <td className="py-2 pr-3 text-slate-300">
-                                      {formatNumber(
-                                        item.directional_accuracy,
-                                        1
-                                      )}
-                                      %
-                                    </td>
-                                    <td className="py-2 pr-3 text-slate-300">
-                                      {formatNumber(item.rmse)}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      </div>
-                    </>
                   )}
                 </div>
               </div>
+            </div>
 
-              <div className="space-y-6 xl:col-span-4">
-                <div className="rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl backdrop-blur-sm">
-                  <div className="mb-4 flex items-center justify-between">
-                    <h2 className="text-xl font-semibold text-slate-100">
-                      Estratégia
-                    </h2>
-                    {strategy && (
-                      <span
-                        className={`rounded-full border px-3 py-1 text-xs font-semibold ${getSignalBadge(
-                          strategy.signal
-                        )}`}
-                      >
-                        {formatSignalName(strategy.signal)}
-                      </span>
+            {/* Section 4: Forward Curve */}
+            <div className="border-b border-stone-300">
+              <div className="p-8 bg-stone-100/40">
+                <span className="ds-field-label mb-4 block">Estrutura a Termo</span>
+                <h3 className="text-3xl font-bold tracking-tighter text-brand-dark mb-8">Forward Curve</h3>
+                <div className="bg-white rounded-2xl border border-stone-300 shadow-sm overflow-hidden">
+                  <ForwardCurvesPanel
+                    data={forwardCurve}
+                    loading={loadingMain}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Section 5: Backtest & Ranking */}
+            <div className="grid grid-cols-1 md:grid-cols-12 border-b border-stone-300">
+              <div className="col-span-1 md:col-span-4 p-8 border-r border-stone-300 bg-stone-100/60">
+                <span className="ds-field-label mb-4 block">Validação Histórica</span>
+                <h3 className="text-3xl font-bold tracking-tighter text-brand-dark mb-6">Backtest Ranking</h3>
+                <p className="text-xs leading-relaxed text-brand-stone-600 mb-8">
+                  Performance comparativa de modelos estatísticos em janelas deslizantes de {backtestHorizon} dias.
+                </p>
+                {backtest && (
+                  <div className="space-y-4">
+                    <div className="p-4 rounded-xl border border-stone-300 bg-white shadow-sm">
+                      <span className="ds-field-label block mb-1">Melhor RMSE</span>
+                      <span className="text-sm font-bold text-brand-dark">{formatModelName(backtest.best_model_rmse)}</span>
+                    </div>
+                    <div className="p-4 rounded-xl border border-stone-300 bg-white shadow-sm">
+                      <span className="ds-field-label block mb-1">Melhor Direcional</span>
+                      <span className="text-sm font-bold text-brand-dark">{formatModelName(backtest.best_model_directional)}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="col-span-1 md:col-span-8 p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div>
+                  <span className="ds-field-label mb-4 block">Ranking RMSE (Menor é melhor)</span>
+                  <div className="h-[250px] w-full">
+                    {backtestRmseChartData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={backtestRmseChartData} layout="vertical">
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
+                          <XAxis type="number" hide />
+                          <YAxis dataKey="model" type="category" tick={{ fontSize: 10, fill: "#78716c" }} width={100} axisLine={false} tickLine={false} />
+                          <Tooltip contentStyle={chartTooltipStyle().contentStyle} />
+                          <Bar dataKey="rmse" fill="#0071B9" radius={[0, 4, 4, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-sm text-brand-stone-400">
+                        {loadingBacktest ? "Calculando backtest..." : "Sem dados de ranking."}
+                      </div>
                     )}
                   </div>
+                </div>
+                <div>
+                  <span className="ds-field-label mb-4 block">Acurácia Direcional (%)</span>
+                  <div className="h-[250px] w-full">
+                    {backtestDirectionalChartData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={backtestDirectionalChartData} layout="vertical">
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
+                          <XAxis type="number" domain={[0, 100]} hide />
+                          <YAxis dataKey="model" type="category" tick={{ fontSize: 10, fill: "#78716c" }} width={100} axisLine={false} tickLine={false} />
+                          <Tooltip contentStyle={chartTooltipStyle().contentStyle} />
+                          <Bar dataKey="directional_accuracy" fill="#22C55E" radius={[0, 4, 4, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-sm text-brand-stone-400">
+                        {loadingBacktest ? "Calculando backtest..." : "Sem dados de acurácia."}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
 
-                  {strategy ? (
+            {/* Section 6: Basis (Soy specific) */}
+            {selectedSymbol === "SJC" && soySpreadSeries && (
+              <div className="grid grid-cols-1 md:grid-cols-12 border-b border-stone-300">
+                <div className="col-span-1 md:col-span-4 p-8 border-r border-stone-300 bg-stone-100/50">
+                  <span className="ds-field-label mb-4 block">Radar de Arbitragem</span>
+                  <h3 className="text-2xl font-bold tracking-tighter text-brand-dark mb-8">Basis Porto vs Interior</h3>
+                  
+                  {soySpreadLatest && (
                     <div className="space-y-4">
                       <div className="grid grid-cols-2 gap-3">
-                        <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-3">
-                          <p className="text-xs uppercase tracking-wide text-slate-400">
-                            Melhor modelo
-                          </p>
-                          <p className="mt-1 text-sm font-semibold text-slate-100">
-                            {formatModelName(strategy.best_model)}
-                          </p>
+                        <div className="p-4 rounded-xl border border-stone-300 bg-white shadow-sm">
+                          <span className="ds-field-label block mb-1">Basis Atual</span>
+                          <span className="text-lg font-bold text-brand-dark">{formatNumber(soySpreadLatest.spread_logistico_brl, 2)} R$/saca</span>
                         </div>
-
-                        <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-3">
-                          <p className="text-xs uppercase tracking-wide text-slate-400">
-                            Confiança
-                          </p>
-                          <p className="mt-1 text-sm font-semibold text-slate-100">
-                            {formatNumber(strategy.confidence * 100, 1)}%
-                          </p>
+                        <div className="p-4 rounded-xl border border-stone-300 bg-white shadow-sm">
+                          <span className="ds-field-label block mb-1">MA30</span>
+                          <span className="text-lg font-bold text-brand-dark">{formatNumber(soySpreadChartTail[soySpreadChartTail.length-1]?.ma30_brl, 2)} R$/saca</span>
                         </div>
                       </div>
 
-                      <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-3">
-                        <p className="text-xs uppercase tracking-wide text-slate-400">
-                          Estratégia sugerida
-                        </p>
-                        <p className="mt-1 text-sm font-semibold text-slate-100">
-                          {formatStrategyName(strategy.recommended_strategy)}
-                        </p>
-                      </div>
-
-                      <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-3">
-                        <p className="text-xs uppercase tracking-wide text-slate-400">
-                          Insight
-                        </p>
-                        <p className="mt-1 text-sm leading-6 text-slate-300">
-                          {strategy.insight}
-                        </p>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-3">
-                          <p className="text-xs uppercase tracking-wide text-slate-400">
-                            RMSE
-                          </p>
-                          <p className="mt-1 text-sm font-semibold text-slate-100">
-                            {formatNumber(strategy.metrics?.rmse)}
-                          </p>
+                      <div className="p-4 rounded-xl border border-stone-300 bg-white shadow-sm">
+                        <div className="flex justify-between items-center">
+                          <span className="ds-field-label">Desvio vs MA30</span>
+                          <span className={`text-sm font-bold ${Number(soySpreadLatest.spread_logistico_pct) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            {formatNumber(Number(soySpreadLatest.spread_logistico_pct) * 100, 2)}%
+                          </span>
                         </div>
+                      </div>
 
-                        <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-3">
-                          <p className="text-xs uppercase tracking-wide text-slate-400">
-                            Directional Acc.
-                          </p>
-                          <p className="mt-1 text-sm font-semibold text-slate-100">
-                            {formatNumber(
-                              strategy.metrics?.directional_accuracy,
-                              1
-                            )}
-                            %
-                          </p>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="p-3 rounded-lg border border-stone-200 bg-stone-100/60 text-center">
+                          <span className="text-[8px] font-bold uppercase text-brand-stone-500 block">Mín Hist.</span>
+                          <span className="text-xs font-bold text-brand-dark">{formatNumber(Math.min(...soySpreadChartTail.map(i => i.spread_logistico_brl || 0)), 2)}</span>
+                        </div>
+                        <div className="p-3 rounded-lg border border-stone-200 bg-stone-100/60 text-center">
+                          <span className="text-[8px] font-bold uppercase text-brand-stone-500 block">Média Hist.</span>
+                          <span className="text-xs font-bold text-brand-dark">{formatNumber(soySpreadChartTail.reduce((a, b) => a + (b.spread_logistico_brl || 0), 0) / soySpreadChartTail.length, 2)}</span>
+                        </div>
+                        <div className="p-3 rounded-lg border border-stone-200 bg-stone-100/60 text-center">
+                          <span className="text-[8px] font-bold uppercase text-brand-stone-500 block">Máx Hist.</span>
+                          <span className="text-xs font-bold text-brand-dark">{formatNumber(Math.max(...soySpreadChartTail.map(i => i.spread_logistico_brl || 0)), 2)}</span>
                         </div>
                       </div>
                     </div>
-                  ) : (
-                    <p className="text-sm text-slate-400">
-                      Nenhuma estratégia carregada.
-                    </p>
                   )}
                 </div>
-
-                <div className="rounded-3xl border border-slate-800/80 bg-gradient-to-br from-slate-900/95 via-slate-900/90 to-slate-950/95 p-5 shadow-xl backdrop-blur-sm">
-                  <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-fuchsia-300/80">
-                        Módulo Basis
-                      </p>
-                      <h2 className="mt-1 text-xl font-semibold text-slate-100">
-                        Basis Interior vs Porto
-                      </h2>
-                      <p className="mt-1 text-sm text-slate-400">
-                        Leitura executiva do diferencial da soja entre Paranaguá
-                        e interior do Paraná.
-                      </p>
-                    </div>
-
-                    <span
-                      className={`rounded-full border px-3 py-1 text-xs font-semibold ${soyBasisClassification.badge}`}
-                    >
-                      {soyBasisClassification.label}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-2xl border border-slate-700 bg-slate-950/40 p-4">
-                      <p className="text-xs uppercase tracking-wide text-slate-400">
-                        Porto
-                      </p>
-                      <p className="mt-1 text-lg font-semibold text-slate-100">
-                        {formatNumber(soySpreadLatest?.spot_port_brl)}
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500">Paranaguá</p>
-                    </div>
-
-                    <div className="rounded-2xl border border-slate-700 bg-slate-950/40 p-4">
-                      <p className="text-xs uppercase tracking-wide text-slate-400">
-                        Interior
-                      </p>
-                      <p className="mt-1 text-lg font-semibold text-slate-100">
-                        {formatNumber(soySpreadLatest?.spot_interior_brl)}
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500">Paraná</p>
-                    </div>
-
-                    <div className="rounded-2xl border border-slate-700 bg-slate-950/40 p-4">
-                      <p className="text-xs uppercase tracking-wide text-slate-400">
-                        Basis
-                      </p>
-                      <p className="mt-1 text-lg font-semibold text-slate-100">
-                        {formatNumber(soySpreadLatest?.spread_logistico_brl)}{" "}
-                        <span className="text-sm font-medium text-slate-400">
-                          R$/saca
-                        </span>
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        Última referência: {formatDateOnly(soySpreadLatest?.date)}
-                      </p>
-                    </div>
-
-                    <div className="rounded-2xl border border-slate-700 bg-slate-950/40 p-4">
-                      <p className="text-xs uppercase tracking-wide text-slate-400">
-                        Basis %
-                      </p>
-                      <p className="mt-1 text-lg font-semibold text-slate-100">
-                        {formatPercent(soySpreadLatest?.spread_logistico_pct)}
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        vs nível spot do interior
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950/45 p-4">
-                    <div className="mb-3 flex flex-wrap items-center gap-2">
-                      <span
-                        className={`rounded-full border px-3 py-1 text-xs font-semibold ${soyBasisClassification.badge}`}
-                      >
-                        {soyBasisClassification.label}
-                      </span>
-                      <span className="rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1 text-xs text-slate-200">
-                        MA30: {formatNumber(soySpreadMa30Last)} R$/saca
-                      </span>
-                      <span className="rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1 text-xs text-slate-200">
-                        Desvio: {formatPercent(soyBasisClassification.desvioPct)}
-                      </span>
-                    </div>
-
-                    <p className="text-sm leading-6 text-slate-300">
-                      {soyBasisClassification.text}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl backdrop-blur-sm">
-                  <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <h2 className="text-xl font-semibold text-slate-100">
-                        Histórico do Basis
-                      </h2>
-                      <p className="text-sm text-slate-400">
-                        Evolução do diferencial porto vs interior com média
-                        móvel de 30 dias.
-                      </p>
-                    </div>
-
-                    {soySpreadSummary && (
-                      <div className="flex flex-wrap gap-2 text-xs">
-                        <span className="rounded-full border border-slate-700 bg-slate-800/70 px-3 py-1 text-slate-200">
-                          Último: {formatNumber(soySpreadSummary.last)} R$/saca
-                        </span>
-                        <span className="rounded-full border border-slate-700 bg-slate-800/70 px-3 py-1 text-slate-200">
-                          Mín: {formatNumber(soySpreadSummary.min)} R$/saca
-                        </span>
-                        <span className="rounded-full border border-slate-700 bg-slate-800/70 px-3 py-1 text-slate-200">
-                          Máx: {formatNumber(soySpreadSummary.max)} R$/saca
-                        </span>
+                <div className="col-span-1 md:col-span-8 p-8">
+                  <div className="mb-6 flex items-center justify-between">
+                    <span className="ds-field-label">Série Temporal do Basis (BRL/sc)</span>
+                    <div className="flex gap-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-brand-blue"></div>
+                        <span className="ds-field-label">Spread</span>
                       </div>
-                    )}
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-amber-500"></div>
+                        <span className="ds-field-label">MA30</span>
+                      </div>
+                    </div>
                   </div>
-
-                  {soySpreadChartTail.length ? (
-                    <div className="h-[340px]">
+                  <div className="h-[300px] w-full">
+                    {soySpreadChartTail.length > 0 ? (
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={soySpreadChartTail}>
-                          <CartesianGrid
-                            strokeDasharray="3 3"
-                            stroke="#334155"
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                          <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#78716c" }} axisLine={{ stroke: '#d6d3d1' }} tickLine={false} tickFormatter={formatShortDate} />
+                          <YAxis domain={soySpreadYDomain} tick={{ fontSize: 10, fill: "#78716c" }} axisLine={false} tickLine={false} tickFormatter={(v) => formatNumber(v, 2)} />
+                          <Tooltip 
+                            contentStyle={chartTooltipStyle().contentStyle} 
+                            formatter={(v: any) => [formatNumber(v, 2), ""]}
                           />
-                          <XAxis
-                            dataKey="date"
-                            tick={{ fontSize: 11, fill: "#cbd5e1" }}
-                            minTickGap={24}
-                            tickFormatter={(value) =>
-                              formatShortDate(String(value))
-                            }
-                          />
-                          <YAxis
-                            domain={soySpreadYDomain}
-                            tick={{ fontSize: 11, fill: "#cbd5e1" }}
-                            tickFormatter={(value) =>
-                              formatNumber(Number(value), 2)
-                            }
-                          />
-                          <Tooltip
-                            {...chartTooltipStyle()}
-                            labelFormatter={(label) =>
-                              formatShortDate(String(label))
-                            }
-                            formatter={(value, name) => {
-                              if (
-                                String(name) === "Basis" ||
-                                String(name) === "spread_logistico_brl"
-                              ) {
-                                return [
-                                  value == null ? "-" : `${formatNumber(Number(value), 2)} R$/saca`,
-                                  "Basis",
-                                ];
-                              }
-                              if (
-                                String(name) === "MA30" ||
-                                String(name) === "ma30_brl"
-                              ) {
-                                return [
-                                  value == null ? "-" : `${formatNumber(Number(value), 2)} R$/saca`,
-                                  "MA30",
-                                ];
-                              }
-                              return [value == null ? "-" : formatNumber(Number(value), 2), String(name ?? "")];
-                            }}
-                          />
-                          <Legend />
-                          <Line
-                            type="monotone"
-                            dataKey="spread_logistico_brl"
-                            name="Basis"
-                            stroke="#22C55E"
-                            strokeWidth={2.5}
-                            dot={false}
-                          />
-                          <Line
-                            type="monotone"
-                            dataKey="ma30_brl"
-                            name="MA30"
-                            stroke={MA30_ORANGE}
-                            strokeWidth={2}
-                            strokeDasharray="6 4"
-                            dot={false}
-                          />
+                          <Line type="monotone" dataKey="spread_logistico_brl" stroke="#0071B9" strokeWidth={2} dot={false} name="Spread" connectNulls />
+                          <Line type="monotone" dataKey="ma30_brl" stroke="#F59E0B" strokeWidth={2} dot={false} name="MA30" connectNulls />
                         </LineChart>
                       </ResponsiveContainer>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-slate-400">
-                      Nenhum histórico de basis carregado.
-                    </p>
-                  )}
-
-                  <div className="mt-5 rounded-2xl border border-slate-800 bg-slate-950/45 p-4">
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-fuchsia-300/80">
-                          Radar de Arbitragem
-                        </p>
-                        <h3 className="mt-1 text-lg font-semibold text-slate-100">
-                          Basis Porto vs Interior
-                        </h3>
-                      </div>
-
-                      <span
-                        className={`rounded-full border px-3 py-1 text-xs font-semibold ${getArbitrageBadge(
-                          arbitrageSignal
-                        )}`}
-                      >
-                        {arbitrageSignal?.classification ?? "Sem leitura"}
-                      </span>
-                    </div>
-
-                    {arbitrageSignal ? (
-                      <>
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                          <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-3">
-                            <p className="text-xs uppercase tracking-wide text-slate-400">
-                              Basis Atual
-                            </p>
-                            <p className="mt-1 text-sm font-semibold text-slate-100">
-                              {formatNumber(arbitrageSignal.spreadAtual)} R$/saca
-                            </p>
-                          </div>
-
-                          <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-3">
-                            <p className="text-xs uppercase tracking-wide text-slate-400">
-                              MA30
-                            </p>
-                            <p className="mt-1 text-sm font-semibold text-slate-100">
-                              {formatNumber(arbitrageSignal.ma30)} R$/saca
-                            </p>
-                          </div>
-
-                          <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-3">
-                            <p className="text-xs uppercase tracking-wide text-slate-400">
-                              Desvio vs MA30
-                            </p>
-                            <p className="mt-1 text-sm font-semibold text-slate-100">
-                              {formatPercent(arbitrageSignal.desvioPct)}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                          <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-3">
-                            <p className="text-xs uppercase tracking-wide text-slate-400">
-                              Mín histórico
-                            </p>
-                            <p className="mt-1 text-sm font-semibold text-slate-100">
-                              {formatNumber(arbitrageSignal.min)} R$/saca
-                            </p>
-                          </div>
-
-                          <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-3">
-                            <p className="text-xs uppercase tracking-wide text-slate-400">
-                              Média histórica
-                            </p>
-                            <p className="mt-1 text-sm font-semibold text-slate-100">
-                              {formatNumber(arbitrageSignal.mean)} R$/saca
-                            </p>
-                          </div>
-
-                          <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-3">
-                            <p className="text-xs uppercase tracking-wide text-slate-400">
-                              Máx histórico
-                            </p>
-                            <p className="mt-1 text-sm font-semibold text-slate-100">
-                              {formatNumber(arbitrageSignal.max)} R$/saca
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="mt-3 rounded-2xl border border-slate-700 bg-slate-900/60 p-3">
-                          <p className="text-xs uppercase tracking-wide text-slate-400">
-                            Leitura operacional
-                          </p>
-                          <p className="mt-1 text-sm leading-6 text-slate-300">
-                            {arbitrageSignal.insight}
-                          </p>
-                        </div>
-                      </>
                     ) : (
-                      <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-3 text-sm text-slate-400">
-                        Dados insuficientes para cálculo do radar de arbitragem.
+                      <div className="flex h-full items-center justify-center text-sm text-brand-stone-400">
+                        Sem dados de basis para exibir.
                       </div>
                     )}
                   </div>
                 </div>
-
-                <div className="rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl backdrop-blur-sm">
-                  <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <h2 className="text-xl font-semibold text-slate-100">
-                        Sentimento
-                      </h2>
-                      <p className="text-sm text-slate-400">
-                        Radar editorial e leitura qualitativa do ativo.
-                      </p>
-                    </div>
-
-                    {sentiment && (
-                      <span
-                        className={`rounded-full border px-3 py-1 text-xs font-semibold ${getSentimentBadge(
-                          sentiment.sentiment_label
-                        )}`}
-                      >
-                        {sentiment.sentiment_label} |{" "}
-                        {sentiment.sentiment_score.toFixed(2)}
-                      </span>
-                    )}
-                  </div>
-
-                  {sentiment ? (
-                    <div className="space-y-4">
-                      <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-3">
-                        <p className="text-xs uppercase tracking-wide text-slate-400">
-                          Resumo editorial
-                        </p>
-                        <p className="mt-1 text-sm leading-6 text-slate-300">
-                          {sentiment.editorial_summary}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="mb-2 text-xs uppercase tracking-wide text-slate-400">
-                          Tópicos no radar
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {sentiment.top_topics.map((topic) => (
-                            <span
-                              key={topic}
-                              className="rounded-full border border-slate-700 bg-slate-800/70 px-3 py-1 text-xs text-slate-300"
-                            >
-                              {topic}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div>
-                        <p className="mb-2 text-xs uppercase tracking-wide text-slate-400">
-                          Manchetes monitoradas ({sentiment.headline_count})
-                        </p>
-                        <div className="space-y-2">
-                          {sentiment.latest_headlines.map((headline, idx) => (
-                            <div
-                              key={`${idx}-${headline}`}
-                              className="rounded-2xl border border-slate-800 bg-slate-800/70 p-3 text-sm text-slate-300"
-                            >
-                              {headline}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <p className="text-xs text-slate-500">
-                        Fonte: {sentiment.source}
-                      </p>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-slate-400">
-                      Nenhum dado de sentimento carregado.
-                    </p>
-                  )}
-                </div>
-
               </div>
-            </div>
-
-            <div className="mt-6 rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl backdrop-blur-sm">
-              <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold text-slate-100">
-                    Resumo Quantitativo
-                  </h2>
-                  <p className="text-sm text-slate-400">
-                    Retrato horizontal do ativo selecionado, reunindo os principais sinais do módulo de mercado.
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
-                <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4">
-                  <p className="text-xs uppercase tracking-wide text-slate-400">Ativo</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-100">
-                    {continuous?.symbol ?? selectedSymbol} — {getAssetDisplayName(
-                      continuous?.symbol ?? selectedSymbol,
-                      continuous?.name
-                    )}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4">
-                  <p className="text-xs uppercase tracking-wide text-slate-400">Melhor modelo do compare</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-100">
-                    {compare ? formatModelName(compare.best_model) : "-"}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4">
-                  <p className="text-xs uppercase tracking-wide text-slate-400">Melhor por RMSE</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-100">
-                    {backtest ? formatModelName(backtest.best_model_rmse) : "-"}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4">
-                  <p className="text-xs uppercase tracking-wide text-slate-400">Melhor por direção</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-100">
-                    {backtest ? formatModelName(backtest.best_model_directional) : "-"}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4">
-                  <p className="text-xs uppercase tracking-wide text-slate-400">Classificação do basis</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-100">
-                    {soyBasisClassification.label}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4">
-                  <p className="text-xs uppercase tracking-wide text-slate-400">Radar de arbitragem</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-100">
-                    {arbitrageSignal?.classification ?? "-"}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </>
-        )}
-
-        {activeTab === "macro" && <MacroCreditoAgroPanel />}
-        {activeTab === "mapa" && (
-          <div className="space-y-6">
-            <MunicipalRiskMap
-              selectedUf={mapSelectedUf}
-              onSelectedUfChange={setMapSelectedUf}
-              selectedMunicipio={mapSelectedMunicipio}
-              onSelectedMunicipioChange={setMapSelectedMunicipio}
-              selectedWindow={mapSelectedWindow}
-              onSelectedWindowChange={setMapSelectedWindow}
-              onMunicipioSnapshotChange={setMapMunicipioSnapshot}
-              showSelectors={true}
-            />
-
-            <AgroClimaPanel
-              selectedCodeMuni={mapSelectedMunicipio || null}
-              selectedUf={mapSelectedUf}
-              selectedWindow={mapSelectedWindow}
-              initialUf={mapSelectedUf || "RS"}
-              showSelector={false}
-              iisSnapshot={mapMunicipioSnapshot}
-            />
+            )}
           </div>
         )}
-        {activeTab === "producao" && <AgroProductionPanel />}
+
+        {activeTab === "macro" && (
+          <div className="reveal active">
+            <div className="grid grid-cols-1 md:grid-cols-12 border-b border-stone-300">
+              <div className="col-span-1 md:col-span-4 p-8 border-r border-stone-300 flex flex-col justify-between bg-stone-100/50">
+                <div>
+                  <span className="ds-kicker mb-4">02 / Macro &amp; Crédito Agro</span>
+                  <h2 className="ds-display leading-tight text-stone-900">
+                    <span className="text-reveal-wrapper reveal-active"><span className="text-reveal-content">Macro &amp;</span></span><br/>
+                    <span className="text-reveal-wrapper reveal-active"><span className="text-reveal-content text-brand-blue">Crédito Agro</span></span>
+                  </h2>
+                  <p className="mt-8 text-sm leading-relaxed text-brand-stone-600 max-w-xs">
+                    Monitoramento de indicadores macroeconômicos e fluxo de crédito para o agronegócio.
+                  </p>
+                </div>
+              </div>
+              <div className="col-span-1 md:col-span-8">
+                {macroRegime?.regime && (
+                  <div className="p-8 flex flex-col justify-center h-full group hover:bg-white transition-colors">
+                    <div className="mb-6 w-fit max-w-full">
+                      <span className="ds-field-label mb-1 block">Regime Atual</span>
+                      <span
+                        className={`inline-block rounded-full px-2 py-0.5 text-[9px] font-bold uppercase ${getMacroRegimeBadgeClass(
+                          macroRegime.regime.badge
+                        )}`}
+                      >
+                        {macroRegime.regime.label}
+                      </span>
+                    </div>
+                    <p className="text-lg font-medium text-brand-dark leading-relaxed">
+                      {macroRegime.regime.summary}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="border-b border-stone-300">
+              <MacroCreditoAgroPanel />
+            </div>
+          </div>
+        )}
+
+        {activeTab === "mapa" && (
+          <div className="reveal active">
+            <div className="grid grid-cols-1 md:grid-cols-12 border-b border-stone-300">
+              <div className="col-span-1 md:col-span-4 p-8 border-r border-stone-300 flex flex-col justify-between bg-stone-100/50">
+                <div>
+                  <span className="ds-kicker mb-4">03 / Clima</span>
+                  <h2 className="ds-display leading-tight text-stone-900">
+                    <span className="text-reveal-wrapper reveal-active"><span className="text-reveal-content">Mapa</span></span><br/>
+                    <span className="text-reveal-wrapper reveal-active"><span className="text-reveal-content text-brand-blue">Agroclimático</span></span>
+                  </h2>
+                  <p className="mt-8 text-sm leading-relaxed text-brand-stone-600 max-w-xs">
+                    Risco de seca municipal e monitoramento de índices agroclimáticos em tempo real.
+                  </p>
+                </div>
+              </div>
+              <div className="col-span-1 md:col-span-8 p-8 flex items-center justify-center bg-stone-100/40">
+                <div className="grid grid-cols-3 gap-8 w-full max-w-lg">
+                  <div className="text-center">
+                    <span className="ds-field-label block mb-1">Municípios</span>
+                    <span className="text-3xl font-bold tracking-tighter text-brand-dark">5.570</span>
+                  </div>
+                  <div className="text-center">
+                    <span className="ds-field-label block mb-1">Índice IIS</span>
+                    <span className="text-3xl font-bold tracking-tighter text-brand-blue">CEMADEN</span>
+                  </div>
+                  <div className="text-center">
+                    <span className="ds-field-label block mb-1">Atualização</span>
+                    <span className="text-3xl font-bold tracking-tighter text-brand-dark">Mensal</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="space-y-0">
+              <div className="border-b border-stone-300">
+                <MunicipalRiskMap
+                  selectedUf={mapSelectedUf}
+                  onSelectedUfChange={setMapSelectedUf}
+                  selectedMunicipio={mapSelectedMunicipio}
+                  onSelectedMunicipioChange={setMapSelectedMunicipio}
+                  selectedWindow={mapSelectedWindow}
+                  onSelectedWindowChange={setMapSelectedWindow}
+                  onMunicipioSnapshotChange={setMapMunicipioSnapshot}
+                  showSelectors={true}
+                />
+              </div>
+              <div className="border-b border-stone-300">
+                <AgroClimaPanel
+                  selectedCodeMuni={mapSelectedMunicipio || null}
+                  selectedUf={mapSelectedUf}
+                  selectedWindow={mapSelectedWindow}
+                  initialUf={mapSelectedUf || "RS"}
+                  showSelector={false}
+                  iisSnapshot={mapMunicipioSnapshot}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "producao" && (
+          <div className="reveal active">
+            <div className="grid grid-cols-1 md:grid-cols-12 border-b border-stone-300">
+              <div className="col-span-1 md:col-span-4 p-8 border-r border-stone-300 flex flex-col justify-between bg-stone-100/50">
+                <div>
+                  <span className="ds-kicker mb-4">04 / Produção</span>
+                  <h2 className="ds-display leading-tight text-stone-900">
+                    <span className="text-reveal-wrapper reveal-active"><span className="text-reveal-content">Produção</span></span><br/>
+                    <span className="text-reveal-wrapper reveal-active"><span className="text-reveal-content text-brand-blue">Agrícola</span></span>
+                  </h2>
+                  <p className="mt-8 text-sm leading-relaxed text-brand-stone-600 max-w-xs">
+                    Dados de safra, área plantada e produtividade por cultura e região.
+                  </p>
+                </div>
+              </div>
+              <div className="col-span-1 md:col-span-8 p-8 flex items-center bg-stone-100/40">
+                <div className="flex gap-12">
+                  <div className="flex flex-col gap-1">
+                    <span className="ds-field-label">Fonte Primária</span>
+                    <span className="text-lg font-bold text-brand-dark">CONAB / IBGE</span>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className="ds-field-label">Culturas</span>
+                    <span className="text-lg font-bold text-brand-dark">Soja, Milho, Trigo</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="border-b border-stone-300">
+              <AgroProductionPanel />
+            </div>
+          </div>
+        )}
       </div>
     </div>
-  );
+  </div>
+);
 }

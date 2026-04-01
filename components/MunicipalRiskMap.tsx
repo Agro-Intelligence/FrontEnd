@@ -103,7 +103,7 @@ function formatNumber(value?: number | null, digits = 2): string {
 }
 
 function getFillColor(value?: number | null): string {
-  if (value === null || value === undefined || Number.isNaN(value)) return "#334155";
+  if (value === null || value === undefined || Number.isNaN(value)) return "#78716c";
   if (value <= 1) return "#7f1d1d";
   if (value <= 2) return "#b91c1c";
   if (value <= 3) return "#ea580c";
@@ -334,65 +334,49 @@ export default function MunicipalRiskMap({
   }, [focusBounds, municipioValue]);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-0">
       {showSelectors && (
-        <div className="rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl backdrop-blur-sm">
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
+        <div className="p-8 border-b border-brand-stone-300 bg-brand-bg/50">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-5 max-w-5xl">
             <div className="lg:col-span-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-300/80">
-                Mapa Agroclimático
-              </p>
-              <h2 className="mt-1 text-2xl font-semibold text-slate-100">
-                Seca municipal — IIS/CEMADEN
-              </h2>
-              <p className="mt-2 text-sm leading-6 text-slate-400">
-                Camada territorial do IIS pronta para conversar com clima e séries históricas.
-              </p>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-brand-stone-600 block mb-2">Seleção Territorial</span>
+              <h2 className="text-2xl font-bold tracking-tighter text-brand-dark">Filtros do Mapa</h2>
             </div>
-
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-slate-300">Estado</label>
+            <div>
+              <label className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-brand-stone-600">Estado</label>
               <select
                 value={ufValue}
                 onChange={(e) => {
                   setUfValue(e.target.value);
                   setMunicipioValue("");
                 }}
-                className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-slate-100 outline-none transition focus:border-sky-500"
+                className="w-full rounded-lg border border-brand-stone-300 bg-white px-4 py-2 text-sm text-brand-dark shadow-sm outline-none focus:border-brand-blue"
               >
-                <option value="" disabled>
-                  Selecione...
-                </option>
+                <option value="" disabled>Selecione...</option>
                 {ufs.map((uf) => (
-                  <option key={uf.abbr_uf} value={uf.abbr_uf}>
-                    {uf.abbr_uf} - {uf.name_uf}
-                  </option>
+                  <option key={uf.abbr_uf} value={uf.abbr_uf}>{uf.abbr_uf} - {uf.name_uf}</option>
                 ))}
               </select>
             </div>
-
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-slate-300">Município</label>
+            <div>
+              <label className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-brand-stone-600">Município</label>
               <select
                 value={municipioValue}
                 onChange={(e) => setMunicipioValue(e.target.value)}
-                className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-slate-100 outline-none transition focus:border-sky-500"
+                className="w-full rounded-lg border border-brand-stone-300 bg-white px-4 py-2 text-sm text-brand-dark shadow-sm outline-none focus:border-brand-blue"
               >
                 <option value="">Todos os municípios</option>
                 {municipiosOptions.map((item) => (
-                  <option key={item.code_muni} value={item.code_muni}>
-                    {item.name_muni}
-                  </option>
+                  <option key={item.code_muni} value={item.code_muni}>{item.name_muni}</option>
                 ))}
               </select>
             </div>
-
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-slate-300">Janela IIS</label>
+            <div>
+              <label className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-brand-stone-600">Janela IIS</label>
               <select
                 value={windowValue}
                 onChange={(e) => setWindowValue(Number(e.target.value) as WindowOption)}
-                className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-slate-100 outline-none transition focus:border-sky-500"
+                className="w-full rounded-lg border border-brand-stone-300 bg-white px-4 py-2 text-sm text-brand-dark shadow-sm outline-none focus:border-brand-blue"
               >
                 <option value={1}>1 mês</option>
                 <option value={3}>3 meses</option>
@@ -404,210 +388,120 @@ export default function MunicipalRiskMap({
       )}
 
       {error && (
-        <div className="rounded-2xl border border-red-900 bg-red-950/40 p-4 text-sm text-red-300">
+        <div className="mx-8 mt-8 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           {error}
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-        <div className="xl:col-span-8">
-          <div className="rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl backdrop-blur-sm">
-            <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h3 className="text-xl font-semibold text-slate-100">
-                  Mapa territorial — {selectedUfLabel}
-                  {selectedMunicipioItem ? ` • ${selectedMunicipioItem.name_muni}` : ""}
-                </h3>
-                <p className="text-sm text-slate-400">
-                  Classe oficial do IIS por município.
-                </p>
-              </div>
-              <div className="rounded-full bg-slate-800 px-3 py-1 text-xs font-semibold text-slate-200">
-                Janela: {windowValue} mês{windowValue > 1 ? "es" : ""}
-              </div>
+      <div className="grid grid-cols-1 md:grid-cols-12 border-b border-brand-stone-300">
+        <div className="col-span-1 md:col-span-8 border-r border-brand-stone-300 p-8">
+          <div className="mb-8 flex items-end justify-between">
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-brand-stone-600 mb-1 block">Visualização Espacial</span>
+              <h3 className="text-2xl font-bold tracking-tighter text-brand-dark">Monitoramento IIS</h3>
             </div>
-
-            <div className="h-[560px] overflow-hidden rounded-2xl border border-slate-800">
-              <MapContainer
-                center={[-14.235, -51.9253]}
-                zoom={4}
-                style={{ height: "100%", width: "100%" }}
-                scrollWheelZoom
-                ref={(mapInstance) => {
-                  if (mapInstance) mapRef.current = mapInstance;
-                }}
-              >
-                <TileLayer
-                  attribution="&copy; OpenStreetMap contributors"
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            <div className="px-3 py-1 rounded-full bg-brand-bg border border-brand-stone-300 text-[10px] font-bold uppercase text-brand-stone-600">
+              {selectedUfLabel} {selectedMunicipioItem ? `• ${selectedMunicipioItem.name_muni}` : ""}
+            </div>
+          </div>
+          <div className="h-[500px] rounded-2xl border border-brand-stone-300 overflow-hidden shadow-inner bg-brand-bg/50">
+            <MapContainer
+              center={[-14.235, -51.9253]}
+              zoom={4}
+              style={{ height: "100%", width: "100%" }}
+              scrollWheelZoom
+              ref={(mapInstance) => { if (mapInstance) mapRef.current = mapInstance; }}
+            >
+              <TileLayer attribution="&copy; OpenStreetMap" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+              {geoJsonObject && (
+                <GeoJSON
+                  key={`${ufValue}-${municipioValue}-${windowValue}-${filteredFeatures.length}`}
+                  data={geoJsonObject as never}
+                  style={(feature: any) => {
+                    const value = feature?.properties?.iis_value;
+                    return {
+                      fillColor: getFillColor(value),
+                      weight: municipioValue ? 2 : 0.5,
+                      opacity: 1,
+                      color: "#ffffff",
+                      fillOpacity: 0.8,
+                    };
+                  }}
+                  onEachFeature={(feature: any, layer: any) => {
+                    const props = feature?.properties || {};
+                    const value = props?.iis_value;
+                    layer.bindTooltip(`
+                      <div style="padding: 8px;">
+                        <div style="font-weight: 800; font-size: 14px; margin-bottom: 4px;">${props?.name_muni}</div>
+                        <div style="font-size: 11px; color: #666;">IIS: ${formatNumber(value, 1)}</div>
+                        <div style="font-size: 11px; font-weight: 700; color: ${getFillColor(value)};">${getIisLabel(value)}</div>
+                      </div>
+                    `);
+                    layer.on({ click: () => setMunicipioValue(String(props?.code_muni ?? "")) });
+                  }}
                 />
-                {geoJsonObject && (
-                  <GeoJSON
-                    key={`${ufValue}-${municipioValue}-${windowValue}-${filteredFeatures.length}`}
-                    data={geoJsonObject as never}
-                    style={(feature: any) => {
-                      const rawValue = feature?.properties?.iis_value;
-                      const value =
-                        rawValue != null && !Number.isNaN(Number(rawValue))
-                          ? Number(rawValue)
-                          : null;
-                      return {
-                        fillColor: getFillColor(value),
-                        weight: municipioValue ? 1.8 : 0.7,
-                        opacity: 1,
-                        color: municipioValue ? "#e2e8f0" : "#0f172a",
-                        fillOpacity: 0.82,
-                      };
-                    }}
-                    onEachFeature={(feature: any, layer: any) => {
-                      const props = feature?.properties || {};
-                      const rawValue = props?.iis_value;
-                      const value =
-                        rawValue != null && !Number.isNaN(Number(rawValue))
-                          ? Number(rawValue)
-                          : null;
+              )}
+            </MapContainer>
+          </div>
+          <div className="mt-6 flex flex-wrap gap-3">
+            {[
+              ["#7f1d1d", "Excepcional"],
+              ["#b91c1c", "Extrema"],
+              ["#ea580c", "Severa"],
+              ["#facc15", "Moderada"],
+              ["#84cc16", "Fraca"],
+              ["#166534", "Normal"],
+            ].map(([color, label]) => (
+              <div key={label} className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: color }} />
+                <span className="text-[10px] font-bold uppercase text-brand-stone-600">{label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
 
-                      layer.bindTooltip(`
-                        <div style="min-width: 200px;">
-                          <div style="font-weight: 700; margin-bottom: 4px;">${props?.name_muni ?? "Município"}</div>
-                          <div>UF: ${props?.abbr_uf ?? "-"}</div>
-                          <div>IIS (${props?.iis_window ?? windowValue}m): ${
-                            value !== null
-                              ? value.toLocaleString("pt-BR", {
-                                  minimumFractionDigits: 0,
-                                  maximumFractionDigits: 0,
-                                })
-                              : "-"
-                          }</div>
-                          <div>Classe IIS: ${getIisLabel(value)}</div>
-                        </div>
-                      `);
-
-                      layer.on({
-                        click: () => {
-                          const codeMuni = String(props?.code_muni ?? "");
-                          setMunicipioValue(codeMuni);
-                        },
-                      });
-                    }}
-                  />
-                )}
-              </MapContainer>
+        <div className="col-span-1 md:col-span-4 bg-brand-bg/10">
+          <div className="p-8 border-b border-brand-stone-300">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-brand-stone-600 block mb-4">Resumo Territorial</span>
+            <div className="space-y-3">
+              <div className="p-4 rounded-xl border border-brand-stone-300 bg-white shadow-sm">
+                <span className="text-[9px] font-bold uppercase text-brand-stone-400 block mb-1">Municípios</span>
+                <span className="text-2xl font-bold text-brand-dark">{tableData?.count ?? 0}</span>
+              </div>
+              <div className="p-4 rounded-xl border border-brand-stone-300 bg-white shadow-sm">
+                <span className="text-[9px] font-bold uppercase text-brand-stone-400 block mb-1">Janela</span>
+                <span className="text-2xl font-bold text-brand-dark">{windowValue}m</span>
+              </div>
+              {selectedMunicipioItem && (
+                <div className="p-4 rounded-xl border border-brand-stone-300 bg-white shadow-sm">
+                  <span className="text-[9px] font-bold uppercase text-brand-stone-400 block mb-1">IIS Selecionado</span>
+                  <span className="text-2xl font-bold text-brand-dark">{formatNumber(selectedMunicipioItem.iis_value, 1)}</span>
+                  <span className="text-[10px] font-bold uppercase text-brand-stone-400 block mt-1">{getIisLabel(selectedMunicipioItem.iis_value)}</span>
+                </div>
+              )}
             </div>
+          </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-6">
-              {[
-                ["#7f1d1d", "1 — Excepcional"],
-                ["#b91c1c", "2 — Extrema"],
-                ["#ea580c", "3 — Severa"],
-                ["#facc15", "4 — Moderada"],
-                ["#84cc16", "5 — Fraca"],
-                ["#166534", "6 — Normal"],
-              ].map(([color, label]) => (
-                <div
-                  key={label}
-                  className="rounded-2xl border border-slate-800 bg-slate-800/60 p-3 text-center text-xs text-slate-300"
+          <div className="p-8">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-brand-stone-600 block mb-4">Críticos no Radar</span>
+            <div className="space-y-2">
+              {topMunicipios.slice(0, 6).map((item) => (
+                <button
+                  key={item.code_muni}
+                  onClick={() => setMunicipioValue(item.code_muni)}
+                  className="w-full p-3 rounded-lg border border-brand-stone-300 bg-white/50 text-left hover:bg-white transition-colors group"
                 >
-                  <div
-                    className="mx-auto mb-2 h-3 w-8 rounded"
-                    style={{ backgroundColor: color }}
-                  />
-                  {label}
-                </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-brand-dark truncate pr-2">{item.name_muni}</span>
+                    <span className="text-xs font-bold" style={{ color: getFillColor(item.iis_value) }}>{formatNumber(item.iis_value, 1)}</span>
+                  </div>
+                </button>
               ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-4 xl:col-span-4">
-          <div className="rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl backdrop-blur-sm">
-            <div className="mb-4">
-              <h3 className="text-xl font-semibold text-slate-100">Resumo territorial</h3>
-              <p className="text-sm text-slate-400">Recorte atual da seleção.</p>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3">
-              <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-400">Estado</p>
-                <p className="mt-1 text-sm font-semibold text-slate-100">{selectedUfLabel}</p>
-              </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-400">Município</p>
-                <p className="mt-1 text-sm font-semibold text-slate-100">
-                  {selectedMunicipioItem?.name_muni ?? "Todos os municípios"}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-400">Janela de análise</p>
-                <p className="mt-1 text-sm font-semibold text-slate-100">
-                  IIS {windowValue} mês{windowValue > 1 ? "es" : ""}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-400">Municípios carregados no mapa</p>
-                <p className="mt-1 text-sm font-semibold text-slate-100">{filteredFeatures.length}</p>
-              </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-400">Municípios na tabela</p>
-                <p className="mt-1 text-sm font-semibold text-slate-100">{tableData?.count ?? 0}</p>
-              </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-400">IIS selecionado</p>
-                <p className="mt-1 text-sm font-semibold text-slate-100">
-                  {selectedMunicipioItem ? formatNumber(selectedMunicipioItem.iis_value, 0) : "-"}
-                </p>
-              </div>
+              {topMunicipios.length === 0 && <p className="text-xs text-brand-stone-400 italic">Nenhum município em alerta.</p>}
             </div>
           </div>
         </div>
       </div>
-
-      <div className="rounded-3xl border border-slate-800/80 bg-slate-900/85 p-5 shadow-xl backdrop-blur-sm">
-        <div className="mb-4">
-          <h3 className="text-xl font-semibold text-slate-100">Top municípios no radar</h3>
-          <p className="text-sm text-slate-400">
-            Apenas municípios com IIS 1, 2 ou 3, sem barra de rolagem.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
-          {topMunicipios.length === 0 ? (
-            <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-3 text-sm text-slate-400 md:col-span-2 xl:col-span-4">
-              Nenhum município com classe 1, 2 ou 3 na seleção atual.
-            </div>
-          ) : (
-            topMunicipios.map((item) => (
-              <button
-                key={`${item.code_muni}-${item.iis_window}`}
-                type="button"
-                onClick={() => setMunicipioValue(item.code_muni)}
-                className="w-full rounded-2xl border border-slate-800 bg-slate-800/70 p-3 text-left transition hover:border-slate-600"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-100">{item.name_muni}</p>
-                    <p className="text-xs text-slate-400">
-                      {item.abbr_uf} • código {item.code_muni}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold text-slate-100">
-                      {formatNumber(item.iis_value, 0)}
-                    </p>
-                    <p className="text-xs text-slate-400">{getIisLabel(item.iis_value)}</p>
-                  </div>
-                </div>
-              </button>
-            ))
-          )}
-        </div>
-      </div>
-
-      {loading && (
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-4 text-sm text-slate-300 shadow-sm backdrop-blur">
-          Carregando camada territorial...
-        </div>
-      )}
     </div>
   );
 }

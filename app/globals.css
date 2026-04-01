@@ -1,13 +1,131 @@
 @import "leaflet/dist/leaflet.css";
 @import "tailwindcss";
 
-html,
-body {
-  margin: 0;
-  padding: 0;
-  min-height: 100%;
+/* Digital Architect — cores em Foundations (design-system.html) */
+@theme {
+  --color-brand-blue: #0071b9;
+  --color-brand-light-blue: #66aad5;
+  --color-brand-green: #726a3c;
+  --color-brand-light-green: #d2e36b;
+  /* Superfície principal #EAEAE5 (Main) */
+  --color-brand-bg: #eaeae5;
+  --color-brand-dark: #1c1c1c;
+  --color-brand-stone-900: #1c1917;
+  --color-brand-stone-500: #78716c;
+  --color-brand-stone-600: #57534e;
+  --color-brand-stone-300: #d6d3d1;
+
+  --font-brand: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 }
 
-body {
-  font-family: Arial, Helvetica, sans-serif;
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-brand-bg);
+    color: var(--color-brand-dark);
+    font-family: var(--font-brand);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Reveal Animations (Digital Architect) */
+  .reveal {
+    opacity: 0;
+    transform: translateY(2rem);
+    transition: all 1s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .reveal.active {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .text-reveal-wrapper {
+    overflow: hidden;
+    display: inline-block;
+    vertical-align: bottom;
+    padding-bottom: 0.28em;
+    padding-right: 0.12em;
+    margin-right: -0.02em;
+  }
+
+  .text-reveal-content {
+    transform: translateY(110%);
+    opacity: 0;
+    transition: transform 1.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 1.2s ease;
+    display: block;
+    line-height: 1.18;
+  }
+
+  .reveal-active .text-reveal-content {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@layer components {
+  /* PNG com fundo branco: darken escolhe o tom mais escuro por canal → branco vira o bege do fundo */
+  .logo-timac-on-bege {
+    @apply inline-flex items-center justify-center rounded-sm bg-brand-bg px-1 py-0.5;
+    isolation: isolate;
+  }
+
+  .logo-timac-on-bege img {
+    @apply h-9 w-auto max-w-[min(100%,260px)] object-contain object-left md:h-10;
+    mix-blend-mode: darken;
+  }
+
+  .logo-timac-on-bege-lg img {
+    @apply h-16 max-w-[min(100%,320px)] md:h-20;
+  }
+
+  /* Foundations — rótulos mono / display (design-system.html) */
+  .ds-kicker {
+    @apply block text-xs font-mono uppercase tracking-normal text-stone-500;
+  }
+
+  .ds-display {
+    @apply text-4xl font-medium tracking-tight text-stone-900 md:text-5xl;
+  }
+
+  .ds-field-label {
+    @apply text-xs font-mono uppercase tracking-widest text-stone-500;
+  }
+
+  /* Botões — primário = stone-900 (Components / Buttons) */
+  .btn-timac {
+    @apply inline-flex items-center gap-2 rounded-md px-6 py-3 text-sm font-medium transition-all;
+  }
+
+  .btn-timac-primary {
+    @apply bg-stone-900 text-white hover:bg-stone-700;
+  }
+
+  .btn-timac-outline {
+    @apply rounded-full border border-stone-900 px-8 py-3 uppercase tracking-widest text-stone-900 hover:bg-stone-900 hover:text-white;
+  }
+
+  /* Grid guia — colunas verticais */
+  .grid-guide {
+    @apply pointer-events-none absolute inset-0 z-0 grid h-full w-full grid-cols-1 gap-0 md:grid-cols-12;
+  }
+
+  .grid-guide-col {
+    @apply h-full border-r border-stone-300/40;
+  }
+
+  /* Abas estilo nav DS: ativo preenchido, inativo branco + borda */
+  .ds-tab {
+    @apply rounded-full border px-5 py-2 text-xs font-medium uppercase tracking-widest transition-all;
+  }
+
+  .ds-tab-active {
+    @apply border-stone-900 bg-stone-900 text-white;
+  }
+
+  .ds-tab-inactive {
+    @apply border-stone-300 bg-white text-stone-600 hover:border-stone-900 hover:text-stone-900;
+  }
 }
