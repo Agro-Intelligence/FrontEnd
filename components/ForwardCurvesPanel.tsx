@@ -457,11 +457,13 @@ export default function ForwardCurvesPanel({
                   )}
                 </div>
               </div>
-              <div className="h-[350px] w-full rounded-2xl border border-stone-200 bg-white p-5 shadow-sm md:p-6">
+              {/* Mesmo tratamento do gráfico de forecast: sem caixa branca — só o SVG */}
+              <div className="h-[350px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart
                     data={chartData}
                     margin={{ top: 12, right: 12, left: 4, bottom: 4 }}
+                    style={{ background: "transparent" }}
                   >
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -534,11 +536,11 @@ export default function ForwardCurvesPanel({
 
             <div className="p-8">
               <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-brand-stone-500 block mb-8">Detalhamento por Vencimento</span>
-              <div className="bg-white/80 rounded-3xl border border-brand-stone-300 shadow-xl overflow-hidden backdrop-blur-md">
+              <div className="rounded-3xl border border-brand-stone-300 overflow-hidden bg-transparent">
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-sm">
                     <thead>
-                      <tr className="border-b border-brand-stone-300 text-left text-brand-stone-500 bg-stone-50/50">
+                      <tr className="border-b border-brand-stone-300 text-left text-brand-stone-500 bg-transparent">
                         <th className="py-5 px-8 font-bold uppercase tracking-widest text-[10px]">Vencimento</th>
                         <th className="py-5 px-8 font-bold uppercase tracking-widest text-[10px]">Data</th>
                         <th className="py-5 px-8 font-bold uppercase tracking-widest text-[10px] text-right">Settlement</th>
@@ -548,7 +550,7 @@ export default function ForwardCurvesPanel({
                     </thead>
                     <tbody className="divide-y divide-brand-stone-200">
                       {items.map((row) => (
-                        <tr key={row.maturity_code} className="hover:bg-white transition-colors group">
+                        <tr key={row.maturity_code} className="hover:bg-white/25 transition-colors group">
                           <td className="py-5 px-8 font-bold text-brand-dark group-hover:text-brand-blue transition-colors">{row.maturity_code}</td>
                           <td className="py-5 px-8 text-brand-stone-500 font-medium">{row.maturity_date}</td>
                           <td className="py-5 px-8 text-right text-brand-dark font-black text-base">{formatNumber(row.settlement, 2)}</td>

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import type { Map as LeafletMap, LatLngBoundsExpression } from "leaflet";
+import { getApiBaseUrl } from "@/lib/api-base";
 
 const MapContainer = dynamic(
   async () => (await import("react-leaflet")).MapContainer,
@@ -17,8 +18,7 @@ const GeoJSON = dynamic(
   { ssr: false }
 );
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000";
+const API_BASE_URL = getApiBaseUrl();
 
 type UfItem = {
   abbr_uf: string;

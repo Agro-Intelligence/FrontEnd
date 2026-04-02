@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { getApiBaseUrl } from "@/lib/api-base";
 import {
   ResponsiveContainer,
   LineChart,
@@ -17,15 +18,7 @@ import {
   Legend,
 } from "recharts";
 
-/** Preferir 127.0.0.1 no .env: em alguns Windows `localhost` resolve para IPv6 e o fetch falha se o API só escuta em IPv4. */
-const API_BASE_URL = (() => {
-  const raw = process.env.NEXT_PUBLIC_API_BASE_URL;
-  if (typeof raw === "string") {
-    const t = raw.trim();
-    if (t.startsWith("http")) return t.replace(/\/$/, "");
-  }
-  return "http://127.0.0.1:8000";
-})();
+const API_BASE_URL = getApiBaseUrl();
 
 const MONTH_LABELS = [
   "Jan",

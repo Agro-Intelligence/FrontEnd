@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { getApiBaseUrl } from "@/lib/api-base";
 import {
   ResponsiveContainer,
   LineChart,
@@ -14,8 +15,7 @@ import {
   Legend,
 } from "recharts";
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000";
+const API_BASE_URL = getApiBaseUrl();
 
 const SKY = "#38BDF8";
 const EMERALD = "#22C55E";

@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { getApiBaseUrl } from "@/lib/api-base";
 import AgroProductionPanel from "@/components/AgroProductionPanel";
 import {
   ResponsiveContainer,
@@ -61,8 +62,7 @@ const ForwardCurvesPanel = dynamic(
   }
 );
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000";
+const API_BASE_URL = getApiBaseUrl();
 
 const SILVER = "#C9CED6";
 const FORECAST_GREEN = "#22C55E";
@@ -2075,7 +2075,7 @@ export default function HedgeEditorialPortal({
               <div className="p-8 bg-stone-100/40">
                 <span className="ds-field-label mb-4 block">Estrutura a Termo</span>
                 <h3 className="text-3xl font-bold tracking-tighter text-brand-dark mb-8">Forward Curve</h3>
-                <div className="bg-white rounded-2xl border border-stone-300 shadow-sm overflow-hidden">
+                <div className="rounded-2xl border border-stone-300 overflow-hidden bg-transparent">
                   <ForwardCurvesPanel
                     data={forwardCurve}
                     loading={loadingMain}
