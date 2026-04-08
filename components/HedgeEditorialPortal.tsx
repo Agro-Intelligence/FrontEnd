@@ -63,6 +63,7 @@ const ForwardCurvesPanel = dynamic(
 );
 
 const API_BASE_URL = getApiBaseUrl();
+const CEPEA_STATUS_REFRESH_MS = 30 * 1000;
 
 const SILVER = "#C9CED6";
 const FORECAST_GREEN = "#22C55E";
@@ -264,6 +265,8 @@ type CepeaUpdateStatusResponse = {
   spot_prices_symbols?: string[];
   last_spot_date?: string | null;
   last_spread_date?: string | null;
+  last_basis_label?: string | null;
+  sync_label?: string | null;
 };
 
 type MacroRegimeContribution = {
@@ -435,6 +438,27 @@ function formatUpdateStatusLabel(status?: string | null): string {
     default:
       return "Sem status";
   }
+}
+
+function getCepeaLastBasisLabel(
+  cepeaStatus?: CepeaUpdateStatusResponse | null,
+  soySpreadDate?: string | null
+): string {
+  if (cepeaStatus?.last_basis_label) return cepeaStatus.last_basis_label;
+  const basisDate = cepeaStatus?.last_spread_date || soySpreadDate || null;
+  if (basisDate) return formatDateOnly(basisDate);
+  if (cepeaStatus?.status === "never_run") return "Sem histórico";
+  return "-";
+}
+
+function getCepeaSyncLabel(
+  cepeaStatus?: CepeaUpdateStatusResponse | null
+): string {
+  if (cepeaStatus?.sync_label) return cepeaStatus.sync_label;
+  const syncAt = cepeaStatus?.updated_at || cepeaStatus?.started_at || null;
+  if (syncAt) return formatDateTime(syncAt);
+  if (cepeaStatus?.status === "never_run") return "Nunca sincronizado";
+  return "-";
 }
 
 function getB3StatusBadge(hasData: boolean): string {
@@ -908,7 +932,6 @@ export default function HedgeEditorialPortal({
 
   const [loadingMain, setLoadingMain] = useState(false);
   const [loadingBacktest, setLoadingBacktest] = useState(false);
-  const [loadingCepeaStatus, setLoadingCepeaStatus] = useState(false);
   const [updatingCepea, setUpdatingCepea] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const [cepeaActionMessage, setCepeaActionMessage] = useState<string | null>(
@@ -1108,7 +1131,6 @@ export default function HedgeEditorialPortal({
   }
 
   async function fetchCepeaStatus() {
-    setLoadingCepeaStatus(true);
     try {
       const res = await fetch(`${API_BASE_URL}/admin/update/cepea/status`, { cache: "no-store" });
       if (!res.ok) {
@@ -1121,8 +1143,6 @@ export default function HedgeEditorialPortal({
       console.error(error);
       setCepeaStatus(null);
       return null;
-    } finally {
-      setLoadingCepeaStatus(false);
     }
   }
 
@@ -1130,7 +1150,14 @@ export default function HedgeEditorialPortal({
     try {
       const res = await fetch(`${API_BASE_URL}/macro-credito-agro/regime`, { cache: "no-store" });
       if (!res.ok) {
-        throw new Error("Erro ao carregar indicador de regime macro.");
+        const detail = await res.text().catch(() => "");
+        console.warn(
+          "Macro regime indisponível no momento.",
+          res.status,
+          detail || "sem detalhe"
+        );
+        setMacroRegime(null);
+        return null;
       }
       const data: MacroRegimeResponse = await res.json();
       setMacroRegime(data);
@@ -1259,6 +1286,16 @@ export default function HedgeEditorialPortal({
     fetchMacroRegime().catch((error) => {
       console.error(error);
     });
+  }, []);
+
+  useEffect(() => {
+    const timerId = window.setInterval(() => {
+      void fetchCepeaStatus();
+    }, CEPEA_STATUS_REFRESH_MS);
+
+    return () => {
+      window.clearInterval(timerId);
+    };
   }, []);
 
   useEffect(() => {
@@ -1649,13 +1686,32 @@ export default function HedgeEditorialPortal({
                     </div>
                     <div className="flex justify-between border-b border-stone-300 pb-2">
                       <span className="text-xs text-brand-stone-600">Último Basis</span>
-                      <span className="text-xs font-bold">{formatDateOnly(cepeaStatus?.last_spread_date)}</span>
+                      <span className="text-xs font-bold">
+                        {getCepeaLastBasisLabel(cepeaStatus, soySpreadLatest?.date)}
+                      </span>
                     </div>
                     <div className="flex justify-between border-b border-stone-300 pb-2">
                       <span className="text-xs text-brand-stone-600">Sincronização</span>
-                      <span className="text-xs font-bold">{formatDateTime(cepeaStatus?.updated_at)}</span>
+                      <span className="text-xs font-bold">
+                        {getCepeaSyncLabel(cepeaStatus)}
+                      </span>
                     </div>
                   </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={handleUpdateCepea}
+                      disabled={updatingCepea}
+                      className="btn-timac !px-3 !py-1.5 !text-[10px] disabled:opacity-60"
+                    >
+                      {updatingCepea ? "Executando..." : "Executar agora"}
+                    </button>
+                  </div>
+                  {cepeaActionMessage ? (
+                    <p className="mt-3 text-[11px] leading-relaxed text-brand-stone-600">
+                      {cepeaActionMessage}
+                    </p>
+                  ) : null}
                 </div>
               </div>
             </div>
