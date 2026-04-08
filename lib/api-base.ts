@@ -4,12 +4,9 @@ export function getApiBaseUrl(): string {
     return configured.replace(/\/$/, "");
   }
 
-  if (typeof window !== "undefined" && window.location?.hostname) {
-    const protocol = window.location.protocol === "https:" ? "https" : "http";
-    return `${protocol}://${window.location.hostname}:8000`;
-  }
-
-  return "http://127.0.0.1:8000";
+  // Em produção (Vercel), evita fallback quebrado para :8000 no domínio do front.
+  // O proxy interno usa API_BASE_URL/NEXT_PUBLIC_API_BASE_URL no servidor.
+  return "/api/proxy";
 }
 
 /** True quando `NEXT_PUBLIC_API_BASE_URL` foi definida no build (URL absoluta com http/https). */
@@ -36,7 +33,7 @@ export function warnIfImplicitApiBaseInProduction(): void {
 
   console.warn(
     "[Hedge Lab] NEXT_PUBLIC_API_BASE_URL não está definida no build. " +
-      `O fallback (${window.location.protocol}//${host}:8000) não aponta para o backend em produção. ` +
+      "O frontend usará /api/proxy como fallback (recomendado apenas temporariamente). " +
       "Defina NEXT_PUBLIC_API_BASE_URL com a URL HTTPS da API e faça redeploy do frontend. " +
       "No backend, inclua a URL do front em CORS_ORIGINS. " +
       "Guia: docs/DEPLOY_RENDER_RAILWAY_VERCEL.md"
