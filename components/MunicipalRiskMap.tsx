@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import type { Map as LeafletMap, LatLngBoundsExpression } from "leaflet";
-import { getApiBaseUrl } from "@/lib/api-base";
+import { formatNetworkFetchError, getApiBaseUrl } from "@/lib/api-base";
 
 const MapContainer = dynamic(
   async () => (await import("react-leaflet")).MapContainer,
@@ -246,7 +246,12 @@ export default function MunicipalRiskMap({
       }
     } catch (err) {
       console.error(err);
-      setError("Não foi possível carregar os dados do mapa agroclimático.");
+      setError(
+        formatNetworkFetchError(
+          err,
+          "Não foi possível carregar os dados do mapa agroclimático."
+        )
+      );
       setMapData(null);
       setTableData(null);
       setMunicipioValue("");
@@ -259,7 +264,12 @@ export default function MunicipalRiskMap({
   useEffect(() => {
     fetchUfs().catch((err) => {
       console.error(err);
-      setError("Não foi possível carregar a lista de estados.");
+      setError(
+        formatNetworkFetchError(
+          err,
+          "Não foi possível carregar a lista de estados."
+        )
+      );
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

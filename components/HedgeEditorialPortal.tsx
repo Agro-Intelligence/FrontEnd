@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { getApiBaseUrl } from "@/lib/api-base";
+import { formatNetworkFetchError, getApiBaseUrl } from "@/lib/api-base";
 import AgroProductionPanel from "@/components/AgroProductionPanel";
 import {
   ResponsiveContainer,
@@ -1215,9 +1215,10 @@ export default function HedgeEditorialPortal({
     } catch (error) {
       console.error(error);
       setCepeaActionMessage(
-        error instanceof Error
-          ? error.message
-          : "Falha ao atualizar CEPEA."
+        formatNetworkFetchError(
+          error,
+          "Falha ao atualizar CEPEA."
+        )
       );
       await fetchCepeaStatus();
     } finally {

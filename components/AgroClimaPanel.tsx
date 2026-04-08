@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { getApiBaseUrl } from "@/lib/api-base";
+import { formatNetworkFetchError, getApiBaseUrl } from "@/lib/api-base";
 import {
   ResponsiveContainer,
   LineChart,
@@ -355,6 +355,21 @@ async function readFastApiErrorDetail(res: Response): Promise<string> {
     /* corpo não-JSON */
   }
   return res.statusText || `HTTP ${res.status}`;
+}
+
+/** CEPEA pode funcionar sem ERA5 na imagem; reforça o que fazer quando o backend devolve erro de dados. */
+function appendAgrometDataHint(detail: string): string {
+  const lower = detail.toLowerCase();
+  const looksData =
+    lower.includes("lfs") ||
+    lower.includes("ponteiro") ||
+    lower.includes("não encontrados") ||
+    lower.includes("nao encontrados") ||
+    lower.includes("materializado") ||
+    lower.includes("parquet") ||
+    lower.includes("agroclim");
+  if (!looksData) return detail;
+  return `${detail} — Confirme na API: GET /health/data (era5_ready_for_endpoints). Deploy: docs/DEPLOY_RENDER_RAILWAY_VERCEL.md (secção 7).`;
 }
 
 function normalizeIbgeDigitsLoose(code: string | null | undefined): string {
@@ -1334,16 +1349,27 @@ export default function AgroClimaPanel({
     async function loadMunicipios() {
       if (!uf) return;
       setLoadingMunicipios(true);
+      setError(null);
       try {
         const res = await fetch(
           `${API_BASE_URL}/agroclima/municipios?uf=${encodeURIComponent(uf)}`,
           { cache: "no-store" }
         );
-        if (!res.ok) throw new Error("Falha ao carregar municípios");
+        if (!res.ok) {
+          const detail = appendAgrometDataHint(
+            (await readFastApiErrorDetail(res)) || "Falha ao carregar municípios"
+          );
+          throw new Error(detail);
+        }
         const data = await res.json();
         setMunicipios(data.items || []);
       } catch (err) {
         console.error(err);
+        setError(
+          err instanceof Error && err.message
+            ? appendAgrometDataHint(err.message)
+            : "Não foi possível carregar municípios (agroclima)."
+        );
       } finally {
         setLoadingMunicipios(false);
       }
@@ -1382,10 +1408,10 @@ export default function AgroClimaPanel({
           { cache: "no-store", headers: { Accept: "application/json" } }
         );
         if (!res.ok) {
-          const detail = await readFastApiErrorDetail(res);
-          throw new Error(
-            detail || "Falha ao carregar série agroclimática"
+          const detail = appendAgrometDataHint(
+            (await readFastApiErrorDetail(res)) || "Falha ao carregar série agroclimática"
           );
+          throw new Error(detail);
         }
         const data: AgroClimaResponse = await res.json();
         setPayload(data);
@@ -1393,9 +1419,10 @@ export default function AgroClimaPanel({
         console.error(err);
         setPayload(null);
         setError(
-          err instanceof Error && err.message
-            ? err.message
-            : "Não foi possível carregar os dados agroclimáticos. Verifique se a API está no ar e se o arquivo ERA5 municipal está em data/curated/agromet."
+          formatNetworkFetchError(
+            err,
+            "Não foi possível carregar os dados agroclimáticos. Verifique se a API está no ar e se o arquivo ERA5 municipal está em data/curated/agromet."
+          )
         );
       } finally {
         setLoading(false);
