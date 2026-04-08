@@ -122,6 +122,13 @@ function getIisLabel(value?: number | null): string {
   return "Normal";
 }
 
+/** Excepcional, Extrema ou Severa — mesmos cortes que `getFillColor` / `getIisLabel` (IIS ≤ 3). */
+function isIisFaseCritica(value?: number | null): boolean {
+  if (value === null || value === undefined || Number.isNaN(value)) return false;
+  const v = Number(value);
+  return Number.isFinite(v) && v <= 3;
+}
+
 function extractLatLngsFromCoordinates(coords: any): [number, number][] {
   const points: [number, number][] = [];
 
@@ -236,9 +243,12 @@ export default function MunicipalRiskMap({
       setMapData(mapJson);
       setTableData(tableJson);
 
-      const stillExists = municipioValue
-        ? tableJson.items.some((item) => item.code_muni === municipioValue)
-        : false;
+      const stillExists = !municipioValue
+        ? true
+        : tableJson.items.some((item) => item.code_muni === municipioValue) ||
+          mapJson.features.some(
+            (f) => String(f.properties?.code_muni ?? "").trim() === municipioValue
+          );
 
       if (!stillExists) {
         setMunicipioValue("");
@@ -306,25 +316,62 @@ export default function MunicipalRiskMap({
     [filteredFeatures]
   );
 
-  const topMunicipios = useMemo(() => {
-    const items = tableData?.items || [];
-    return items
-      .filter((item) => item.iis_value !== null && item.iis_value !== undefined)
-      .filter((item) => {
-        const v = Number(item.iis_value);
-        return !Number.isNaN(v) && v >= 1 && v <= 3;
-      })
-      .sort((a, b) => {
-        const diff = Number(a.iis_value) - Number(b.iis_value);
-        if (diff !== 0) return diff;
-        return a.name_muni.localeCompare(b.name_muni, "pt-BR");
+  /** Todos os municípios em fase crítica no estado, a partir do GeoJSON (não só os 500 da tabela). */
+  const criticalMunicipios = useMemo((): MunicipalItem[] => {
+    const features = mapData?.features || [];
+    const seen = new Set<string>();
+    const rows: MunicipalItem[] = [];
+    for (const f of features) {
+      const p = f.properties || {};
+      if (!isIisFaseCritica(p.iis_value as number | null)) continue;
+      const code = String(p.code_muni ?? "").trim();
+      if (!code || seen.has(code)) continue;
+      seen.add(code);
+      const v = p.iis_value != null ? Number(p.iis_value) : null;
+      rows.push({
+        code_muni: code,
+        name_muni: String(p.name_muni ?? ""),
+        abbr_uf: String(p.abbr_uf ?? ufValue),
+        iis_window: windowValue,
+        iis_value: v,
+        iis_1m: null,
+        iis_3m: null,
+        iis_6m: null,
+        ref_date: typeof p.ref_date === "string" ? p.ref_date : null,
       });
-  }, [tableData]);
+    }
+    rows.sort((a, b) => {
+      const diff = Number(a.iis_value) - Number(b.iis_value);
+      if (diff !== 0) return diff;
+      return a.name_muni.localeCompare(b.name_muni, "pt-BR");
+    });
+    return rows;
+  }, [mapData, ufValue, windowValue]);
 
-  const selectedMunicipioItem = useMemo(() => {
-    if (!municipioValue || !tableData?.items) return null;
-    return tableData.items.find((item) => item.code_muni === municipioValue) || null;
-  }, [municipioValue, tableData]);
+  const selectedMunicipioItem = useMemo((): MunicipalItem | null => {
+    if (!municipioValue) return null;
+    const fromTable = tableData?.items?.find(
+      (item) => item.code_muni === municipioValue
+    );
+    if (fromTable) return fromTable;
+    const feat = mapData?.features?.find(
+      (f) => String(f.properties?.code_muni ?? "").trim() === municipioValue
+    );
+    const p = feat?.properties;
+    if (!p) return null;
+    const v = p.iis_value != null ? Number(p.iis_value) : null;
+    return {
+      code_muni: String(p.code_muni ?? "").trim(),
+      name_muni: String(p.name_muni ?? ""),
+      abbr_uf: String(p.abbr_uf ?? ufValue),
+      iis_window: windowValue,
+      iis_value: v,
+      iis_1m: windowValue === 1 ? v : null,
+      iis_3m: windowValue === 3 ? v : null,
+      iis_6m: windowValue === 6 ? v : null,
+      ref_date: typeof p.ref_date === "string" ? p.ref_date : null,
+    };
+  }, [municipioValue, tableData, mapData, ufValue, windowValue]);
 
   useEffect(() => {
     onMunicipioSnapshotChange?.(selectedMunicipioItem);
@@ -482,6 +529,14 @@ export default function MunicipalRiskMap({
                 <span className="text-[9px] font-bold uppercase text-brand-stone-400 block mb-1">Janela</span>
                 <span className="text-2xl font-bold text-brand-dark">{windowValue}m</span>
               </div>
+              <div className="p-4 rounded-xl border border-orange-200 bg-orange-50/60 shadow-sm">
+                <span className="text-[9px] font-bold uppercase text-brand-stone-500 block mb-1">
+                  Zona crítica (Exc./Extr./Sev.)
+                </span>
+                <span className="text-2xl font-bold text-brand-dark">
+                  {loading ? "—" : criticalMunicipios.length}
+                </span>
+              </div>
               {selectedMunicipioItem && (
                 <div className="p-4 rounded-xl border border-brand-stone-300 bg-white shadow-sm">
                   <span className="text-[9px] font-bold uppercase text-brand-stone-400 block mb-1">IIS Selecionado</span>
@@ -495,9 +550,10 @@ export default function MunicipalRiskMap({
           <div className="p-8">
             <span className="text-[10px] font-bold uppercase tracking-wider text-brand-stone-600 block mb-4">Críticos no Radar</span>
             <div className="space-y-2">
-              {topMunicipios.slice(0, 6).map((item) => (
+              {criticalMunicipios.slice(0, 6).map((item) => (
                 <button
                   key={item.code_muni}
+                  type="button"
                   onClick={() => setMunicipioValue(item.code_muni)}
                   className="w-full p-3 rounded-lg border border-brand-stone-300 bg-white/50 text-left hover:bg-white transition-colors group"
                 >
@@ -507,11 +563,76 @@ export default function MunicipalRiskMap({
                   </div>
                 </button>
               ))}
-              {topMunicipios.length === 0 && <p className="text-xs text-brand-stone-400 italic">Nenhum município em alerta.</p>}
+              {criticalMunicipios.length === 0 && !loading && (
+                <p className="text-xs text-brand-stone-400 italic">
+                  Nenhum município em fase crítica (Excepcional, Extrema ou Severa).
+                </p>
+              )}
             </div>
           </div>
         </div>
       </div>
+
+      {ufValue && !error && (
+        <div className="border-b border-brand-stone-300 bg-stone-50/90">
+          <div className="px-8 py-5">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-4">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-brand-stone-600">
+                Faixa crítica no mapa
+              </span>
+              {loading ? (
+                <span className="text-sm text-brand-stone-400">Carregando municípios…</span>
+              ) : (
+                <>
+                  <span className="text-2xl font-bold tabular-nums text-brand-dark">
+                    {criticalMunicipios.length}
+                  </span>
+                  <span className="text-xs text-brand-stone-500 max-w-xl">
+                    municípios em Excepcional, Extrema ou Severa (IIS ≤ 3) ·{" "}
+                    {selectedUfLabel} · janela {windowValue} mês(es)
+                  </span>
+                </>
+              )}
+            </div>
+            {!loading && criticalMunicipios.length > 0 && (
+              <div className="rounded-xl border border-brand-stone-300 bg-white p-3 shadow-sm">
+                <div className="flex flex-nowrap gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:thin]">
+                  {criticalMunicipios.map((item) => {
+                    const sel = municipioValue === item.code_muni;
+                    return (
+                      <button
+                        key={item.code_muni}
+                        type="button"
+                        onClick={() => setMunicipioValue(item.code_muni)}
+                        className={`shrink-0 rounded-lg border px-3 py-2 text-left transition-colors ${
+                          sel
+                            ? "border-brand-blue bg-brand-blue/10 ring-2 ring-brand-blue/30"
+                            : "border-brand-stone-200 bg-white hover:border-brand-stone-400 hover:bg-stone-50"
+                        }`}
+                      >
+                        <span className="block max-w-[10rem] truncate text-xs font-bold text-brand-dark">
+                          {item.name_muni}
+                        </span>
+                        <span
+                          className="text-[10px] font-bold"
+                          style={{ color: getFillColor(item.iis_value) }}
+                        >
+                          IIS {formatNumber(item.iis_value, 1)} · {getIisLabel(item.iis_value)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {!loading && mapData && criticalMunicipios.length === 0 && (
+              <p className="text-xs text-brand-stone-400 italic">
+                Nenhum município em fase crítica neste estado e janela IIS.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
