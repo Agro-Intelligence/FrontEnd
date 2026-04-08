@@ -44,10 +44,8 @@ const MacroCreditoAgroPanel = dynamic(
   }
 );
 
-const MunicipalRiskMap = dynamic(
-  () => import("@/components/MunicipalRiskMap"),
-  { ssr: false }
-);
+// Import estático: o UI do mapa atualiza no mesmo chunk do portal (evita chunk lazy antigo em cache).
+import MunicipalRiskMap from "@/components/MunicipalRiskMap";
 
 const ForwardCurvesPanel = dynamic(
   () => import("@/components/ForwardCurvesPanel"),

@@ -122,11 +122,26 @@ function getIisLabel(value?: number | null): string {
   return "Normal";
 }
 
-/** Excepcional, Extrema ou Severa — mesmos cortes que `getFillColor` / `getIisLabel` (IIS ≤ 3). */
-function isIisFaseCritica(value?: number | null): boolean {
-  if (value === null || value === undefined || Number.isNaN(value)) return false;
-  const v = Number(value);
-  return Number.isFinite(v) && v <= 3;
+/** GeoJSON/API por vezes enviam IIS como string ou com vírgula decimal (ex.: "3,0"). */
+function coerceIisValue(raw: unknown): number | null {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  const t = String(raw).trim().replace(/\s/g, "").replace(",", ".");
+  if (!t) return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Excepcional, Extrema ou Severa.
+ * A base IIS no backend usa classes inteiras 1–6 (ver `IIS_CLASS_LABELS`); arredondamos
+ * para não perder "3" por ruído float (ex. 3.01) nem contar fora da escala.
+ */
+function isIisFaseCritica(value: unknown): boolean {
+  const v = coerceIisValue(value);
+  if (v === null) return false;
+  const cls = Math.round(v);
+  return cls >= 1 && cls <= 3;
 }
 
 function extractLatLngsFromCoordinates(coords: any): [number, number][] {
@@ -323,11 +338,11 @@ export default function MunicipalRiskMap({
     const rows: MunicipalItem[] = [];
     for (const f of features) {
       const p = f.properties || {};
-      if (!isIisFaseCritica(p.iis_value as number | null)) continue;
+      if (!isIisFaseCritica(p.iis_value)) continue;
       const code = String(p.code_muni ?? "").trim();
       if (!code || seen.has(code)) continue;
       seen.add(code);
-      const v = p.iis_value != null ? Number(p.iis_value) : null;
+      const v = coerceIisValue(p.iis_value);
       rows.push({
         code_muni: code,
         name_muni: String(p.name_muni ?? ""),
@@ -359,7 +374,7 @@ export default function MunicipalRiskMap({
     );
     const p = feat?.properties;
     if (!p) return null;
-    const v = p.iis_value != null ? Number(p.iis_value) : null;
+    const v = coerceIisValue(p.iis_value);
     return {
       code_muni: String(p.code_muni ?? "").trim(),
       name_muni: String(p.name_muni ?? ""),
@@ -475,7 +490,7 @@ export default function MunicipalRiskMap({
                   key={`${ufValue}-${municipioValue}-${windowValue}-${filteredFeatures.length}`}
                   data={geoJsonObject as never}
                   style={(feature: any) => {
-                    const value = feature?.properties?.iis_value;
+                    const value = coerceIisValue(feature?.properties?.iis_value);
                     return {
                       fillColor: getFillColor(value),
                       weight: municipioValue ? 2 : 0.5,
@@ -486,7 +501,7 @@ export default function MunicipalRiskMap({
                   }}
                   onEachFeature={(feature: any, layer: any) => {
                     const props = feature?.properties || {};
-                    const value = props?.iis_value;
+                    const value = coerceIisValue(props?.iis_value);
                     layer.bindTooltip(`
                       <div style="padding: 8px;">
                         <div style="font-weight: 800; font-size: 14px; margin-bottom: 4px;">${props?.name_muni}</div>
@@ -539,7 +554,7 @@ export default function MunicipalRiskMap({
             </div>
           </div>
 
-          <div className="p-8">
+          <div className="p-8" data-criticos-ui="count-only-v2">
             <span className="text-[10px] font-bold uppercase tracking-wider text-brand-stone-600 block mb-1">
               Críticos no Radar
             </span>
@@ -560,6 +575,12 @@ export default function MunicipalRiskMap({
                 </>
               )}
             </div>
+            {!loading && criticalMunicipios.length === 0 && mapData && (
+              <p className="mt-2 text-xs text-brand-stone-400 italic leading-relaxed">
+                Nenhum município em Excepcional, Extrema ou Severa para este estado e
+                janela IIS.
+              </p>
+            )}
           </div>
         </div>
       </div>
