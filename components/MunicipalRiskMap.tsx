@@ -544,6 +544,30 @@ export default function MunicipalRiskMap({
                 <span className="text-[9px] font-bold uppercase text-brand-stone-400 block mb-1">Janela</span>
                 <span className="text-2xl font-bold text-brand-dark">{windowValue}m</span>
               </div>
+              <div
+                className="p-4 rounded-xl border border-brand-stone-300 bg-white shadow-sm"
+                data-criticos-ui="count-card-v3"
+              >
+                <span className="text-[9px] font-bold uppercase text-brand-stone-400 block mb-1">
+                  Críticos no Radar
+                </span>
+                <span className="text-[9px] text-brand-stone-500 block mb-3 leading-snug">
+                  Zona crítica: classes IIS 1 a 3 (Excepcional, Extrema, Severa)
+                </span>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-brand-stone-500">
+                    Quantidade
+                  </span>
+                  <span className="text-2xl font-bold tabular-nums text-orange-600">
+                    {loading ? "—" : criticalMunicipios.length}
+                  </span>
+                </div>
+                {!loading && criticalMunicipios.length === 0 && mapData && (
+                  <p className="mt-3 text-[10px] text-brand-stone-400 italic leading-relaxed border-t border-brand-stone-200 pt-3">
+                    Nenhum município nesta faixa para o estado e janela IIS selecionados.
+                  </p>
+                )}
+              </div>
               {selectedMunicipioItem && (
                 <div className="p-4 rounded-xl border border-brand-stone-300 bg-white shadow-sm">
                   <span className="text-[9px] font-bold uppercase text-brand-stone-400 block mb-1">IIS Selecionado</span>
@@ -552,35 +576,6 @@ export default function MunicipalRiskMap({
                 </div>
               )}
             </div>
-          </div>
-
-          <div className="p-8" data-criticos-ui="count-only-v2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-brand-stone-600 block mb-1">
-              Críticos no Radar
-            </span>
-            <span className="text-[9px] font-bold uppercase text-brand-stone-400 block mb-3">
-              Excepcional, Extrema ou Severa (IIS ≤ 3)
-            </span>
-            <div className="flex items-baseline gap-2">
-              {loading ? (
-                <span className="text-3xl font-bold tabular-nums text-brand-stone-400">—</span>
-              ) : (
-                <>
-                  <span className="text-3xl font-bold tabular-nums text-brand-dark">
-                    {criticalMunicipios.length}
-                  </span>
-                  <span className="text-sm font-medium text-brand-stone-500">
-                    {criticalMunicipios.length === 1 ? "município" : "municípios"}
-                  </span>
-                </>
-              )}
-            </div>
-            {!loading && criticalMunicipios.length === 0 && mapData && (
-              <p className="mt-2 text-xs text-brand-stone-400 italic leading-relaxed">
-                Nenhum município em Excepcional, Extrema ou Severa para este estado e
-                janela IIS.
-              </p>
-            )}
           </div>
         </div>
       </div>
