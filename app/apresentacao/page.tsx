@@ -11,6 +11,7 @@ const VALID_TABS = new Set<PortalTab>([
   "macro",
   "mapa",
   "producao",
+  "custos",
 ]);
 
 function ApresentacaoInner() {

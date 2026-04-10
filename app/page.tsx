@@ -2,7 +2,9 @@
 
 import dynamic from "next/dynamic";
 import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AgroTechHeroIllustration } from "@/components/AgroTechHeroIllustration";
+import { isPortalTab, type PortalTab } from "@/components/HedgeEditorialPortal";
 
 const HedgeEditorialPortal = dynamic(
   () => import("@/components/HedgeEditorialPortal"),
@@ -22,7 +24,13 @@ const HedgeEditorialPortal = dynamic(
 );
 
 export default function Page() {
-  const [entered, setEntered] = useState(false);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedTab = searchParams.get("tab");
+  const initialPortalTab: PortalTab = isPortalTab(requestedTab)
+    ? requestedTab
+    : "mercado";
+  const [entered, setEntered] = useState(initialPortalTab !== "mercado");
 
   useEffect(() => {
     if (entered) return;
@@ -34,8 +42,24 @@ export default function Page() {
     return () => clearTimeout(timer);
   }, [entered]);
 
+  useEffect(() => {
+    if (initialPortalTab !== "mercado") {
+      setEntered(true);
+    }
+  }, [initialPortalTab]);
+
   if (entered) {
-    return <HedgeEditorialPortal onGoHome={() => setEntered(false)} />;
+    return (
+      <HedgeEditorialPortal
+        initialTab={initialPortalTab}
+        onGoHome={() => {
+          setEntered(false);
+          if (requestedTab) {
+            router.replace("/");
+          }
+        }}
+      />
+    );
   }
 
   return (

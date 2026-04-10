@@ -60,6 +60,19 @@ const ForwardCurvesPanel = dynamic(
   }
 );
 
+const CustosPerformancePanel = dynamic(
+  () => import("@/components/CustosPerformancePanel"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="rounded-xl border border-stone-300 bg-white p-4 text-xs text-brand-stone-600 shadow-sm flex items-center gap-3">
+        <div className="w-4 h-4 border-2 border-brand-blue border-t-transparent rounded-full animate-spin"></div>
+        Carregando custos &amp; performance…
+      </div>
+    ),
+  }
+);
+
 const API_BASE_URL = getApiBaseUrl();
 const CEPEA_STATUS_REFRESH_MS = 30 * 1000;
 
@@ -67,7 +80,19 @@ const SILVER = "#C9CED6";
 const FORECAST_GREEN = "#22C55E";
 const MA30_ORANGE = "#F59E0B";
 
-export type PortalTab = "mercado" | "macro" | "mapa" | "producao";
+export type PortalTab = "mercado" | "macro" | "mapa" | "producao" | "custos";
+
+const PORTAL_TABS: PortalTab[] = [
+  "mercado",
+  "macro",
+  "mapa",
+  "producao",
+  "custos",
+];
+
+export function isPortalTab(value: string | null | undefined): value is PortalTab {
+  return PORTAL_TABS.includes((value ?? "") as PortalTab);
+}
 
 type HedgeEditorialPortalProps = {
   onGoHome?: () => void;
@@ -910,6 +935,23 @@ export default function HedgeEditorialPortal({
     setActiveTab(initialTab);
   }, [initialTab]);
 
+  useEffect(() => {
+    if (!pathname) return;
+
+    const currentUrl = new URL(window.location.href);
+    const currentTab = currentUrl.searchParams.get("tab");
+
+    if (activeTab === "mercado") {
+      if (!currentTab) return;
+      currentUrl.searchParams.delete("tab");
+    } else {
+      if (currentTab === activeTab) return;
+      currentUrl.searchParams.set("tab", activeTab);
+    }
+
+    router.replace(`${pathname}${currentUrl.search}`, { scroll: false });
+  }, [activeTab, pathname, router]);
+
   const [continuous, setContinuous] = useState<ContinuousResponse | null>(null);
   const [compare, setCompare] = useState<CompareResponse | null>(null);
   const [forecast, setForecast] = useState<ForecastResponse | null>(null);
@@ -946,6 +988,11 @@ export default function HedgeEditorialPortal({
   const [backtestHorizon] = useState<number>(5);
   const [backtestTrainMin] = useState<number>(30);
   const [backtestStep] = useState<number>(2);
+
+  function handleTabChange(tab: PortalTab) {
+    setActiveTab(tab);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
   function handleGoHome() {
     if (typeof onGoHome === "function") {
@@ -1563,7 +1610,7 @@ export default function HedgeEditorialPortal({
                   v2.0.0
                 </span>
                 <span className="rounded-full border border-stone-300 bg-white px-3 py-1 text-xs font-medium uppercase tracking-widest text-stone-700">
-                  Mercado • Macro • Clima • Produção
+                  Mercado • Macro • Clima • Produção • Custos
                 </span>
               </div>
             </div>
@@ -1574,7 +1621,7 @@ export default function HedgeEditorialPortal({
         <div className="mb-6 flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => setActiveTab("mercado")}
+            onClick={() => handleTabChange("mercado")}
             className={`ds-tab ${activeTab === "mercado" ? "ds-tab-active" : "ds-tab-inactive"}`}
           >
             Mercado Futuro
@@ -1582,7 +1629,7 @@ export default function HedgeEditorialPortal({
 
           <button
             type="button"
-            onClick={() => setActiveTab("macro")}
+            onClick={() => handleTabChange("macro")}
             className={`ds-tab ${activeTab === "macro" ? "ds-tab-active" : "ds-tab-inactive"}`}
           >
             Macro & Crédito Agro
@@ -1590,7 +1637,7 @@ export default function HedgeEditorialPortal({
 
           <button
             type="button"
-            onClick={() => setActiveTab("mapa")}
+            onClick={() => handleTabChange("mapa")}
             className={`ds-tab ${activeTab === "mapa" ? "ds-tab-active" : "ds-tab-inactive"}`}
           >
             Mapa Agroclimático
@@ -1598,10 +1645,18 @@ export default function HedgeEditorialPortal({
 
           <button
             type="button"
-            onClick={() => setActiveTab("producao")}
+            onClick={() => handleTabChange("producao")}
             className={`ds-tab ${activeTab === "producao" ? "ds-tab-active" : "ds-tab-inactive"}`}
           >
             Produção Agrícola
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleTabChange("custos")}
+            className={`ds-tab ${activeTab === "custos" ? "ds-tab-active" : "ds-tab-inactive"}`}
+          >
+            Custos &amp; Performance
           </button>
         </div>
 
@@ -2421,6 +2476,41 @@ export default function HedgeEditorialPortal({
             </div>
             <div className="border-b border-stone-300">
               <AgroProductionPanel />
+            </div>
+          </div>
+        )}
+
+        {activeTab === "custos" && (
+          <div className="reveal active">
+            <div className="grid grid-cols-1 md:grid-cols-12 border-b border-stone-300">
+              <div className="col-span-1 md:col-span-4 p-8 border-r border-stone-300 flex flex-col justify-between bg-stone-100/50">
+                <div>
+                  <span className="ds-kicker mb-4">05 / Custos</span>
+                  <h2 className="ds-display leading-tight text-stone-900">
+                    <span className="text-reveal-wrapper reveal-active"><span className="text-reveal-content">Custos &amp;</span></span><br/>
+                    <span className="text-reveal-wrapper reveal-active"><span className="text-reveal-content text-brand-blue">Performance</span></span>
+                  </h2>
+                  <p className="mt-8 text-sm leading-relaxed text-brand-stone-600 max-w-xs">
+                    Custo de produção CONAB (soja, agricultura empresarial) agregado por macrorregião,
+                    com leitura estratégica e referência visual para composição da saca.
+                  </p>
+                </div>
+              </div>
+              <div className="col-span-1 md:col-span-8 p-8 flex items-center bg-stone-100/40">
+                <div className="flex flex-wrap gap-8">
+                  <div className="flex flex-col gap-1">
+                    <span className="ds-field-label">Fonte</span>
+                    <span className="text-lg font-bold text-brand-dark">CONAB — CustoProducao.txt</span>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className="ds-field-label">Cultura</span>
+                    <span className="text-lg font-bold text-brand-dark">Soja (60 kg)</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="border-b border-stone-300 p-4 md:p-6">
+              <CustosPerformancePanel />
             </div>
           </div>
         )}

@@ -1,0 +1,33 @@
+# Roda na raiz quando este diretório é o repositório público (subtree push de frontend/).
+name: Frontend CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+concurrency:
+  group: frontend-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+        env:
+          # Build deve passar sem secrets; runtime na Vercel usa NEXT_PUBLIC_API_BASE_URL.
+          NEXT_PUBLIC_API_BASE_URL: https://example.invalid
