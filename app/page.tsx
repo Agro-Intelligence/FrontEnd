@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AgroTechHeroIllustration } from "@/components/AgroTechHeroIllustration";
 import { isPortalTab, type PortalTab } from "@/components/HedgeEditorialPortal";
@@ -23,7 +23,7 @@ const HedgeEditorialPortal = dynamic(
   }
 );
 
-export default function Page() {
+function PageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const requestedTab = searchParams.get("tab");
@@ -197,5 +197,21 @@ export default function Page() {
         </footer>
       </div>
     </main>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center bg-brand-bg text-brand-dark font-brand">
+          <div className="rounded-md border border-stone-300 bg-white px-8 py-6 text-sm shadow-sm">
+            Carregando portal...
+          </div>
+        </main>
+      }
+    >
+      <PageInner />
+    </Suspense>
   );
 }
